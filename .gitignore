@@ -1,0 +1,8 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Generated license cache
+infrequent_licenses/
+
