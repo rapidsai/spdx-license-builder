@@ -17,7 +17,7 @@ Since RAPIDS build directories are under `cpp/` this can be used to extract depe
 - Optionally includes full license texts (fetched from local cache or SPDX API)
 
 
-## License Caching
+### License Caching
 
 License texts are cached in two directories:
 
