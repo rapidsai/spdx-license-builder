@@ -288,9 +288,6 @@ def main():
     print("THIRD-PARTY SOFTWARE LICENSES")
     print("=" * 80)
     print()
-    print("This file contains license and copyright information for third-party")
-    print("software components used in cuVS (excluding NVIDIA copyrights).")
-    print()
     print("Files are listed with their associated licenses and copyright holders.")
     print()
 
