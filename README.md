@@ -47,34 +47,36 @@ When a license is not found locally, it's automatically fetched from `http://spd
 
 ### 2. `find_and_copy_license_files.py` - LICENSE File Extractor
 
-Finds all LICENSE files in project directories and copies them to an output directory with project-specific names.
+Finds all LICENSE files in project directories and outputs their full contents in a formatted report.
 
 **What it does:**
 - Searches for all files starting with "LICENSE" in `c/` and `cpp/` directories
 - Identifies which project each LICENSE file belongs to
-- Captures subdirectory structure for projects with multiple LICENSE files
-- Copies files to an output directory with naming scheme: `<filename>-<project>[-<subdirs>]`
+- Reads the full license text from each file
+- Shows all locations that share the same license text together
+- Outputs formatted report with full license texts
 
 **Usage:**
 ```bash
-./find_and_copy_license_files.py [PROJECT_PATH...] -o OUTPUT_DIR
+./find_and_copy_license_files.py [PROJECT_PATH...]
 ```
 
 **Examples:**
 ```bash
 # Extract LICENSE files from a single project
-./find_and_copy_license_files.py /path/to/project -o ./output
+./find_and_copy_license_files.py /path/to/project
 
-# Extract from multiple projects
-./find_and_copy_license_files.py /path/to/project1 /path/to/project2 -o ./licenses
+# Extract from multiple projects and combine results
+./find_and_copy_license_files.py /path/to/project1 /path/to/project2
 
-# The output directory will contain files like:
-#   LICENSE-cccl                    (from cccl-src/LICENSE)
-#   LICENSE-cccl-libcudacxx     (from cccl-src/libcudacxx/LICENSE)
-#   LICENSE-projectname             (from projectname-src/LICENSE)
+# Redirect output to a file
+./find_and_copy_license_files.py /path/to/project > all_licenses.txt
 ```
 
-**Output:** Physical copies of LICENSE files in the specified directory, renamed to include project names and subdirectory paths.
+**Output:** Formatted text report to stdout containing:
+- File locations organized by project
+- Full license text from each LICENSE file
+
 
 ---
 

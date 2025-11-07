@@ -5,14 +5,15 @@
 #
 
 """
-Script to extract all LICENSE files from project directories and organize them by project.
+Script to extract all LICENSE files from project directories and output them to stdout.
 
 Uses the same directory search logic as extract_licenses_via_spdx.py to find LICENSE files in 'c' and 'cpp' directories.
+Outputs found licenses in a formatted report similar to extract_licenses_via_spdx.py.
 """
 
 import argparse
+import hashlib
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -20,19 +21,21 @@ from pathlib import Path
 from utility import get_project_relative_path, walk_directories_for_files
 
 
-def extract_license_files(project_paths, output_dir):
+def extract_license_files(project_paths):
     """
-    Extract LICENSE files from project directories and copy them to output directory.
+    Extract LICENSE files from project directories.
 
     Args:
         project_paths: List of project root directories to scan
-        output_dir: Output directory where LICENSE files will be copied
 
     Returns:
-        Dictionary mapping (filename, project, subdirs) -> source_path
+        Dictionary mapping content_hash -> dict with 'content', 'filenames', 'paths'
+        Grouped by unique license content (using hash as key), not filename
     """
-    # Dictionary to track license files by project and subdirectory
-    license_files = {}
+    # Dictionary to track license files organized by content hash
+    # Structure: content_hash -> {'content': text, 'filenames': set of filenames, 'paths': {full_path: relative_path}}
+    content_map = {}
+    total_files = 0
 
     # Directories to scan within each project (same as extract_licenses_via_spdx.py)
     directories_to_scan = ["c", "cpp"]
@@ -48,99 +51,56 @@ def extract_license_files(project_paths, output_dir):
         )
 
         print(f"Found {len(matching_files)} LICENSE file(s)", file=sys.stderr)
+        total_files += len(matching_files)
 
         # Process each LICENSE file
         for file_path in matching_files:
             # Get project name using the heuristic function
             project_name, relative_path = get_project_relative_path(file_path)
 
-            # Use 'unknown' if no project detected
-            if project_name is None:
-                project_name = "unknown"
-
             # Get just the filename
             filename = os.path.basename(file_path)
 
-            # Extract subdirectory path (everything between project root and filename)
-            # relative_path contains the full path from project root, including filename
-            # We want the directory components only
-            rel_path_obj = Path(relative_path)
-            if len(rel_path_obj.parts) > 1:
-                # There are subdirectories between project root and the file
-                subdirs = '-'.join(rel_path_obj.parts[:-1])  # All parts except filename
-            else:
-                # File is directly in project root
-                subdirs = ""
+            # Read the license content
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
 
-            # Track this license file with subdirectory information
-            key = (filename, project_name, subdirs)
-            if key not in license_files:
-                license_files[key] = []
-            license_files[key].append(file_path)
+                # Compute hash of content to use as key
+                content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
 
-    return license_files
+                # Use hash as the key to group identical licenses
+                if content_hash not in content_map:
+                    content_map[content_hash] = {
+                        'content': content,
+                        'filenames': set(),
+                        'paths': {}
+                    }
 
+                # Track the filename and path for this content
+                content_map[content_hash]['filenames'].add(filename)
+                content_map[content_hash]['paths'][file_path] = relative_path
 
-def copy_license_files(license_files, output_dir):
-    """
-    Copy license files to the output directory with project-specific names.
+            except Exception as e:
+                print(f"Warning: Could not read {file_path}: {e}", file=sys.stderr)
 
-    Args:
-        license_files: Dictionary mapping (filename, project, subdirs) -> list of source paths
-        output_dir: Output directory where files will be copied
-    """
-    # Create output directory if it doesn't exist
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    print(f"Found {total_files} total LICENSE files", file=sys.stderr)
+    print(f"Found {len(content_map)} unique LICENSE contents", file=sys.stderr)
 
-    copied_count = 0
-
-    for (filename, project_name, subdirs), source_paths in license_files.items():
-        # Use the first occurrence of each (filename, project, subdirs) tuple
-        source_path = source_paths[0]
-
-        # Create output filename: <filename>-<project>[-<subdirs>]
-        # Format: LICENSE-cccl or LICENSE.TXT-cccl-libcudacxx
-        if subdirs:
-            output_filename = f"{filename}-{project_name}-{subdirs}"
-        else:
-            output_filename = f"{filename}-{project_name}"
-
-        output_file_path = output_path / output_filename
-
-        try:
-            # Copy the file
-            shutil.copy2(source_path, output_file_path)
-            print(f"Copied: {source_path} -> {output_file_path}", file=sys.stderr)
-            copied_count += 1
-
-            # If there are multiple sources for this key, note it
-            if len(source_paths) > 1:
-                print(f"  Note: {len(source_paths)} instances found, using first one", file=sys.stderr)
-
-        except Exception as e:
-            print(f"Error copying {source_path}: {e}", file=sys.stderr)
-
-    print(f"\nTotal files copied: {copied_count}", file=sys.stderr)
+    return content_map
 
 
 def main():
-    """Main function to extract LICENSE files."""
+    """Main function to extract and output LICENSE files."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description='Extract LICENSE files from project directories and organize by project.'
+        description='Extract LICENSE files from project directories and output to stdout.'
     )
     parser.add_argument(
         'project_path',
         type=str,
         nargs='+',
         help='Path(s) to the project root directory/directories to scan'
-    )
-    parser.add_argument(
-        '-o', '--output',
-        type=str,
-        required=True,
-        help='Output directory where LICENSE files will be copied'
     )
     args = parser.parse_args()
 
@@ -159,26 +119,79 @@ def main():
         project_paths.append(project_path)
 
     print(f"Project path(s): {', '.join(str(p) for p in project_paths)}", file=sys.stderr)
-    print(f"Output directory: {args.output}", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
 
     # Extract license files from all project paths
-    license_files = extract_license_files(project_paths, args.output)
+    content_map = extract_license_files(project_paths)
 
-    if not license_files:
+    if not content_map:
         print("No LICENSE files found.", file=sys.stderr)
         return
 
-    # Display what was found
+    # Output results
     print("=" * 60, file=sys.stderr)
-    print(f"Found LICENSE files in {len(license_files)} unique location(s):", file=sys.stderr)
-    for (filename, project_name, subdirs), paths in sorted(license_files.items()):
-        location = f"{project_name}/{subdirs}" if subdirs else project_name
-        print(f"  {filename} in '{location}': {len(paths)} instance(s)", file=sys.stderr)
+    print("LICENSE Files Found:", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
 
-    # Copy files to output directory
-    copy_license_files(license_files, args.output)
+    # Print to stdout (can be redirected to a file)
+    # Output header
+    print("=" * 80)
+    print("LICENSE FILES")
+    print("=" * 80)
+    print()
+    print("This file contains LICENSE file contents from third-party dependencies.")
+    print()
+    print("Licenses are grouped by content - files with identical license text are shown together.")
+    print()
+
+    # Sort by the first filename found for each unique content for consistent output
+    sorted_items = sorted(content_map.items(), key=lambda x: sorted(x[1]['filenames'])[0])
+
+    for idx, (content_hash, file_info) in enumerate(sorted_items, 1):
+        filenames = file_info['filenames']
+        file_paths_dict = file_info['paths']
+        license_content = file_info['content']
+
+        print("=" * 80)
+        print(f"License #{idx}: {', '.join(sorted(filenames))}")
+        print("=" * 80)
+        print()
+
+        # Display file locations using project heuristic
+        print("  Locations:")
+        # Group paths by project for cleaner output
+        project_paths_map = {}
+        for full_path, rel_path in file_paths_dict.items():
+            project_name, _ = get_project_relative_path(full_path)
+            if project_name:
+                if project_name not in project_paths_map:
+                    project_paths_map[project_name] = set()
+                project_paths_map[project_name].add(rel_path)
+            else:
+                # No project detected, use relative path
+                if 'unknown' not in project_paths_map:
+                    project_paths_map['unknown'] = set()
+                project_paths_map['unknown'].add(rel_path)
+
+        # Print grouped by project
+        for project in sorted(project_paths_map.keys()):
+            for rel_path in sorted(project_paths_map[project]):
+                print(f"    {project}: {rel_path}")
+        print()
+
+        # Output the license content
+        if license_content:
+            print("  License Text:")
+            print()
+            # Indent the license text for readability
+            for line in license_content.splitlines():
+                print(f"    {line}")
+            print()
+        else:
+            print("  (License text could not be read)")
+            print()
+
+        print()
 
 
 if __name__ == "__main__":
