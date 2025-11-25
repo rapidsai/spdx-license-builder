@@ -39,16 +39,26 @@ def extract_license_files(project_paths):
 
     # Directories to scan within each project (same as extract_licenses_via_spdx.py)
     directories_to_scan = ["c", "cpp"]
+    directories_to_exclude = ("python", "third-party", "thirdparty", "cmake", "rust", "test", "tests", "benchmark", "benchmarks")
 
     for project_path in project_paths:
         print(f"Scanning project: {project_path}", file=sys.stderr)
 
-        # Find all files starting with LICENSE
-        matching_files = walk_directories_for_files(
-            str(project_path),
-            directories_to_scan,
-            "LICENSE"
-        )
+        matching_files = []
+        for directory in directories_to_scan:
+            dir_path = os.path.join(str(project_path), directory)
+            if not os.path.exists(dir_path):
+                print(f"Warning: Directory '{dir_path}' does not exist", file=sys.stderr)
+                continue
+
+            # Find all files starting with LICENSE
+            matching_files.extend(
+                walk_directories_for_files(
+                    dir_path,
+                    directories_to_exclude,
+                    "LICENSE"
+                )
+            )
 
         print(f"Found {len(matching_files)} LICENSE file(s)", file=sys.stderr)
         total_files += len(matching_files)
@@ -128,22 +138,6 @@ def main():
         print("No LICENSE files found.", file=sys.stderr)
         return
 
-    # Output results
-    print("=" * 60, file=sys.stderr)
-    print("LICENSE Files Found:", file=sys.stderr)
-    print("=" * 60, file=sys.stderr)
-
-    # Print to stdout (can be redirected to a file)
-    # Output header
-    print("=" * 80)
-    print("LICENSE FILES")
-    print("=" * 80)
-    print()
-    print("This file contains LICENSE file contents from third-party dependencies.")
-    print()
-    print("Licenses are grouped by content - files with identical license text are shown together.")
-    print()
-
     # Sort by the first filename found for each unique content for consistent output
     sorted_items = sorted(content_map.items(), key=lambda x: sorted(x[1]['filenames'])[0])
 
@@ -153,10 +147,6 @@ def main():
         license_content = file_info['content']
 
         print("=" * 80)
-        print(f"License #{idx}: {', '.join(sorted(filenames))}")
-        print("=" * 80)
-        print()
-
         # Display file locations using project heuristic
         print("  Locations:")
         # Group paths by project for cleaner output
@@ -191,6 +181,7 @@ def main():
             print("  (License text could not be read)")
             print()
 
+        print("=" * 80)
         print()
 
 

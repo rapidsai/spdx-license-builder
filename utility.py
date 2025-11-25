@@ -134,34 +134,28 @@ def get_license_text(license_type, base_path):
         return None
 
 
-def walk_directories_for_files(base_path, directories, file_pattern):
+def walk_directories_for_files(dir_path, directories_to_exclude, file_pattern):
     """
     Walk through specified directories and collect all files matching a pattern.
 
     Args:
         base_path: Base path to start searching from
-        directories: List of directory names to search (e.g., ["c", "cpp"])
+        directories_to_exclude: set of directory to not walk (e.g., ("python", "rust"))
         file_pattern: Pattern to match files (e.g., "LICENSE*")
 
     Returns:
         List of file paths that match the pattern
     """
     matching_files = []
+    print(f"Scanning directory: {dir_path}", file=sys.stderr)
+    for root, dirs, files in os.walk(dir_path):
+        dirs[:] = [d for d in dirs if d not in directories_to_exclude]
 
-    for directory in directories:
-        dir_path = os.path.join(base_path, directory)
-
-        if not os.path.exists(dir_path):
-            print(f"Warning: Directory '{dir_path}' does not exist", file=sys.stderr)
-            continue
-
-        print(f"Scanning directory: {dir_path}", file=sys.stderr)
-        for root, dirs, files in os.walk(dir_path):
-            for file in files:
-                # Check if file matches the pattern (starts with)
-                if file.startswith(file_pattern):
-                    file_path = os.path.join(root, file)
-                    matching_files.append(file_path)
+        for file in files:
+            # Check if file matches the pattern (starts with)
+            if file.startswith(file_pattern):
+                file_path = os.path.join(root, file)
+                matching_files.append(file_path)
 
     return matching_files
 

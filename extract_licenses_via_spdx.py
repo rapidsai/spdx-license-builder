@@ -170,9 +170,10 @@ def find_spdx_entries(file_path):
     return entries
 
 
-def walk_directories(base_path, directories):
+def walk_directories(dir_path, directories_to_exclude):
     """
-    Walk through specified directories and collect all non-NVIDIA SPDX entries.
+    Walk through specified directoru and collect all non-NVIDIA SPDX entries.
+    Don't entry any directory in the exclude list e.g ( "tests", "benchmarks" )
 
     Returns a dict mapping filename -> dict with 'paths' and 'licenses' info.
     """
@@ -181,35 +182,30 @@ def walk_directories(base_path, directories):
     file_count = 0
     total_entries = 0
 
-    for directory in directories:
-        dir_path = os.path.join(base_path, directory)
+    print(f"Scanning directory: {dir_path}", file=sys.stderr)
+    for root, dirs, files in os.walk(dir_path):
+        dirs[:] = [d for d in dirs if d not in directories_to_exclude]
 
-        if not os.path.exists(dir_path):
-            print(f"Warning: Directory '{dir_path}' does not exist", file=sys.stderr)
-            continue
+        for file in files:
+            file_path = os.path.join(root, file)
+            file_count += 1
 
-        print(f"Scanning directory: {dir_path}", file=sys.stderr)
-        for root, dirs, files in os.walk(dir_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                file_count += 1
+            entries = find_spdx_entries(file_path)
+            total_entries += len(entries)
 
-                entries = find_spdx_entries(file_path)
-                total_entries += len(entries)
+            # Organize entries by filename
+            for license_type, year_range, owner, fpath in entries:
+                filename = os.path.basename(fpath)
 
-                # Organize entries by filename
-                for license_type, year_range, owner, fpath in entries:
-                    filename = os.path.basename(fpath)
+                if filename not in file_map:
+                    file_map[filename] = {
+                        'paths': set(),
+                        'licenses': set()
+                    }
 
-                    if filename not in file_map:
-                        file_map[filename] = {
-                            'paths': set(),
-                            'licenses': set()
-                        }
-
-                    # Store the file path and license info
-                    file_map[filename]['paths'].add(fpath)
-                    file_map[filename]['licenses'].add((license_type, year_range, owner))
+                # Store the file path and license info
+                file_map[filename]['paths'].add(fpath)
+                file_map[filename]['licenses'].add((license_type, year_range, owner))
 
     unique_files = len(file_map)
     print(f"Scanned {file_count} files", file=sys.stderr)
@@ -254,6 +250,7 @@ def main():
 
     # Look for 'c' and 'cpp' directories within the project
     directories_to_scan = ["c", "cpp"]
+    directories_to_exclude = ("benchmark", "cmake", "test", "tests")
 
     print(f"Project path(s): {', '.join(str(p) for p in project_paths)}", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
@@ -261,17 +258,23 @@ def main():
     # Collect all unique SPDX entries organized by filename from all project paths
     file_map = {}
     for project_path in project_paths:
-        path_file_map = walk_directories(str(project_path), directories_to_scan)
 
-        # Merge results from this path into the main file_map
-        for filename, file_info in path_file_map.items():
-            if filename not in file_map:
-                file_map[filename] = {
-                    'paths': set(),
-                    'licenses': set()
-                }
-            file_map[filename]['paths'].update(file_info['paths'])
-            file_map[filename]['licenses'].update(file_info['licenses'])
+        for directory in directories_to_scan:
+            dir_path = os.path.join(str(project_path), directory)
+            if not os.path.exists(dir_path):
+                print(f"Warning: Directory '{dir_path}' does not exist", file=sys.stderr)
+                continue
+            path_file_map = walk_directories(dir_path, directories_to_exclude)
+
+            # Merge results from this path into the main file_map
+            for filename, file_info in path_file_map.items():
+                if filename not in file_map:
+                    file_map[filename] = {
+                        'paths': set(),
+                        'licenses': set()
+                    }
+                file_map[filename]['paths'].update(file_info['paths'])
+                file_map[filename]['licenses'].update(file_info['licenses'])
 
     # Output the results
     print("=" * 60, file=sys.stderr)
@@ -285,7 +288,7 @@ def main():
     # Print to stdout (can be redirected to a file)
     # Output header
     print("=" * 80)
-    print("THIRD-PARTY SOFTWARE LICENSES")
+    print("Non-NVIDIA Third-Party Licenses for specific files")
     print("=" * 80)
     print()
     print("Files are listed with their associated licenses and copyright holders.")
