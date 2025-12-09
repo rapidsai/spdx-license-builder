@@ -82,6 +82,6 @@ Finds all LICENSE files in project directories and outputs their full contents i
 
 ## License
 
-SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 SPDX-License-Identifier: Apache-2.0
 
