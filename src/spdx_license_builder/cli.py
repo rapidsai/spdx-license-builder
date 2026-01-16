@@ -10,6 +10,7 @@ Unified command-line interface for SPDX License Builder tools.
 Provides a single entry point with subcommands:
   license-builder extract  - Extract SPDX copyright entries
   license-builder copy     - Find and copy LICENSE files
+  license-builder all      - Run both extract and copy (combined output)
 """
 
 import argparse
@@ -34,9 +35,13 @@ Examples:
   license-builder copy /path/to/project
   license-builder copy /path/to/project1 /path/to/project2 --output licenses.txt
 
+  # Run both extract and copy (recommended for complete license information)
+  license-builder all /path/to/project --output LICENSE
+
 For more help on a specific command:
   license-builder extract --help
   license-builder copy --help
+  license-builder all --help
         """,
     )
 
@@ -130,6 +135,84 @@ their full contents in a formatted report.
         help="Normalize copyright years for better deduplication",
     )
 
+    # Subcommand: all (combined)
+    all_parser = subparsers.add_parser(
+        "all",
+        help="Run both extract and copy commands (combined output)",
+        description="Extract SPDX copyright entries and LICENSE files in a single command.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  license-builder all /path/to/project --output LICENSE
+  license-builder all /path/to/project --with-licenses --output all_licenses.txt
+  license-builder all /path/to/project1 /path/to/project2 --with-licenses
+
+This command runs both 'extract' and 'copy' operations and combines their
+output into a single comprehensive license report.
+        """,
+    )
+    all_parser.add_argument(
+        "project_path",
+        type=str,
+        nargs="+",
+        help="Path(s) to the project root directory/directories to scan",
+    )
+    all_parser.add_argument(
+        "--with-licenses",
+        action="store_true",
+        help="Include full license text for SPDX entries (default: True)",
+        default=True,
+    )
+    all_parser.add_argument(
+        "--no-licenses",
+        action="store_false",
+        dest="with_licenses",
+        help="Don't include full license text for SPDX entries",
+    )
+    all_parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=None,
+        help="Write output to file instead of stdout (default: stdout)",
+    )
+    all_parser.add_argument(
+        "--deduplicate-rapids",
+        action="store_true",
+        default=True,
+        help="Deduplicate licenses from known RAPIDS/NVIDIA projects (default: enabled)",
+    )
+    all_parser.add_argument(
+        "--no-deduplicate-rapids",
+        action="store_false",
+        dest="deduplicate_rapids",
+        help="Disable RAPIDS license deduplication",
+    )
+    all_parser.add_argument(
+        "--handle-cccl",
+        action="store_true",
+        default=True,
+        help="Special handling for CCCL component licenses (default: enabled)",
+    )
+    all_parser.add_argument(
+        "--no-handle-cccl",
+        action="store_false",
+        dest="handle_cccl",
+        help="Disable CCCL special handling",
+    )
+    all_parser.add_argument(
+        "--normalize-years",
+        action="store_true",
+        default=True,
+        help="Normalize copyright years for better deduplication (default: enabled)",
+    )
+    all_parser.add_argument(
+        "--no-normalize-years",
+        action="store_false",
+        dest="normalize_years",
+        help="Disable year normalization",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -159,6 +242,18 @@ their full contents in a formatted report.
         if args.normalize_years:
             sys.argv.append("--normalize-years")
         copy_main()
+
+    elif args.command == "all":
+        from .combined import run_combined
+
+        run_combined(
+            project_paths=args.project_path,
+            with_licenses=args.with_licenses,
+            output_file=args.output,
+            deduplicate_rapids=args.deduplicate_rapids,
+            handle_cccl=args.handle_cccl,
+            normalize_years=args.normalize_years,
+        )
 
     else:
         parser.print_help()
