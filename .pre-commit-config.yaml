@@ -41,16 +41,16 @@ repos:
       - id: ruff-format
         name: Format with ruff
 
-  # Run tests (fast enough to include in pre-commit)
+  # Run tests (parallel execution for speed)
   - repo: local
     hooks:
       - id: pytest-check
-        name: Run pytest
+        name: Run pytest (parallel)
         entry: pytest
         language: system
         pass_filenames: false
         always_run: true
-        args: ['-q', '--tb=line']
+        args: ['-q', '-n', 'auto', '--tb=line']
         stages: [commit]
 
       - id: pytest-cov
@@ -59,7 +59,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        args: ['--cov=spdx_license_builder', '--cov-report=term-missing:skip-covered', '--cov-fail-under=80']
+        args: ['-n', 'auto', '--cov=spdx_license_builder', '--cov-report=term-missing:skip-covered', '--cov-fail-under=80']
         stages: [push]
 
 # Global settings
