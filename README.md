@@ -63,15 +63,17 @@ Non-NVIDIA Third-Party Licenses for specific files
 Files are listed with their associated licenses and copyright holders.
 
 ================================================================================
-File: another_facebook_file.cuh
+File: Select.cuh
 ================================================================================
 
   Locations:
-    test_project: cpp/include/another_facebook_file.cuh
+    cudf: cpp/include/cudf/detail/utilities/Select.cuh
+    cuml: cpp/src/neighbors/Select.cuh
+    raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
 
   License: Apache-2.0 AND MIT
 
-    Copyright (c) Facebook, Inc. and its affiliates
+    Copyright (c) 2019-2024 Facebook, Inc. and its affiliates
 
 
 ================================================================================
@@ -79,12 +81,14 @@ File: bsd_file.h
 ================================================================================
 
   Locations:
-    test_project: cpp/include/bsd_file.h
+    project: cpp/include/bsd_file.h
 
   License: BSD-3-Clause
 
     Copyright (c) 2020-2023 Example Corporation
 ```
+
+*Note: Files with the same name from multiple projects are grouped together. Copyright dates are merged to show the full range (earliest-latest).*
 
 ---
 
