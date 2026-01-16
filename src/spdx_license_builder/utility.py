@@ -103,6 +103,12 @@ def get_license_text(license_type, base_path):
     # Clean the license type (remove trailing whitespace, comment markers, etc.)
     license_id = re.sub(r"[*/\s]+$", "", license_type.strip())
 
+    # Alias common license variations to their canonical SPDX identifiers
+    LICENSE_ALIASES = {
+        "BSD-3": "BSD-3-Clause",
+    }
+    license_id = LICENSE_ALIASES.get(license_id, license_id)
+
     # Check local directories in priority order
     license_directories = ["common_licenses", "infrequent_licenses"]
 

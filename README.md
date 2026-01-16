@@ -4,12 +4,42 @@ This repository contains tools for extracting and managing license information f
 
 ## Overview
 
-The `license-builder` tool provides two main commands:
+The `license-builder` tool provides three main commands:
 
-### 1. `license-builder extract` - SPDX Copyright Extractor
+### 1. `license-builder all` - Complete License Report (Recommended)
+
+**NEW!** Combines both SPDX extraction and LICENSE file collection into a single comprehensive report.
+
+**What it does:**
+- Runs both `extract` and `copy` commands
+- Combines output into a single well-formatted license report
+- Ideal for generating complete LICENSE files for distributions
+
+**Usage:**
+```bash
+# Generate complete license report
+license-builder all /path/to/project --output LICENSE
+
+# Multiple projects with all features enabled (default)
+license-builder all /path/to/project1 /path/to/project2 --output LICENSE
+```
+
+**Replaces legacy workflow:**
+```bash
+# OLD (manual concatenation):
+license-builder extract . --with-licenses > SPDX_FRAGMENT
+license-builder copy . > DEP_LICENSES
+cat LICENSE SPDX_FRAGMENT DEP_LICENSES > FINAL_LICENSE
+
+# NEW (single command):
+license-builder all . --output FINAL_LICENSE
+```
+
+---
+
+### 2. `license-builder extract` - SPDX Copyright Extractor
 
 Extracts third-party copyright and license information from source code files by parsing SPDX headers.
-Since RAPIDS build directories are under `cpp/` this can be used to extract dependencies SPDX copyright details as well/
 
 **What it does:**
 - Scans entire project directory for SPDX copyright tags (`SPDX-FileCopyrightText` and `SPDX-License-Identifier`)
@@ -34,25 +64,35 @@ When a license is not found in the bundled cache, it's automatically fetched fro
 
 After installation, use the unified command-line tool:
 ```bash
+# Recommended: Complete license report
+license-builder all [PROJECT_PATH...] --output LICENSE
+
+# Or use individual commands:
 license-builder extract [PROJECT_PATH...] [--with-licenses]
+license-builder copy [PROJECT_PATH...]
 ```
 
 **Examples:**
 ```bash
-# Scan a single project
-license-builder extract /path/to/project
+# Generate complete license report (recommended)
+license-builder all /path/to/project --output LICENSE
 
-# Add full license texts and write to a file
-license-builder extract /path/to/project --with-licenses --output third_party_licenses.txt
+# Extract only SPDX copyright entries
+license-builder extract /path/to/project --with-licenses --output third_party.txt
+
+# Extract only LICENSE files
+license-builder copy /path/to/project --output dependencies.txt
 
 # Scan multiple projects
-license-builder extract /path/to/project1 /path/to/project2 --with-licenses
+license-builder all /path/to/project1 /path/to/project2 --output LICENSE
 ```
 
 **Alternative usage:**
 ```bash
 # Run as Python module
+python -m spdx_license_builder all /path/to/project --output LICENSE
 python -m spdx_license_builder extract /path/to/project --with-licenses
+python -m spdx_license_builder copy /path/to/project
 ```
 
 **Example output:**
