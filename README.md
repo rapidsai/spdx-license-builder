@@ -89,7 +89,7 @@ license-builder copy /path/to/project
 license-builder copy /path/to/project1 /path/to/project2
 
 # Redirect output to a file
-license-builder copy /path/to/project > all_licenses.txt
+license-builder copy /path/to/project --output all_licenses.txt
 ```
 
 **Alternative usage methods:**
