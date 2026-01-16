@@ -28,11 +28,11 @@ def main():
 Examples:
   # Extract SPDX copyright entries
   license-builder extract /path/to/project
-  license-builder extract /path/to/project --with-licenses > output.txt
+  license-builder extract /path/to/project --with-licenses --output third_party.txt
 
   # Find and copy LICENSE files
   license-builder copy /path/to/project
-  license-builder copy /path/to/project1 /path/to/project2 > licenses.txt
+  license-builder copy /path/to/project1 /path/to/project2 --output licenses.txt
 
 For more help on a specific command:
   license-builder extract --help
@@ -59,8 +59,8 @@ For more help on a specific command:
         epilog="""
 Examples:
   license-builder extract /path/to/project
-  license-builder extract /path/to/project --with-licenses
-  license-builder extract /path/to/project1 /path/to/project2 --with-licenses > output.txt
+  license-builder extract /path/to/project --with-licenses --output third_party.txt
+  license-builder extract /path/to/project1 /path/to/project2 --with-licenses
 
 This command scans C/C++ source files for SPDX copyright tags and extracts
 non-NVIDIA third-party copyright information.
@@ -77,6 +77,13 @@ non-NVIDIA third-party copyright information.
         action="store_true",
         help="Include full license text for each license type found",
     )
+    extract_parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=None,
+        help="Write output to file instead of stdout (default: stdout)",
+    )
 
     # Subcommand: copy
     copy_parser = subparsers.add_parser(
@@ -87,8 +94,8 @@ non-NVIDIA third-party copyright information.
         epilog="""
 Examples:
   license-builder copy /path/to/project
-  license-builder copy /path/to/project1 /path/to/project2
-  license-builder copy /path/to/project > all_licenses.txt
+  license-builder copy /path/to/project1 /path/to/project2 --output all_licenses.txt
+  license-builder copy /path/to/project --deduplicate-rapids --handle-cccl
 
 This command searches for all files starting with "LICENSE" and outputs
 their full contents in a formatted report.
@@ -99,6 +106,28 @@ their full contents in a formatted report.
         type=str,
         nargs="+",
         help="Path(s) to the project root directory/directories to scan",
+    )
+    copy_parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=None,
+        help="Write output to file instead of stdout (default: stdout)",
+    )
+    copy_parser.add_argument(
+        "--deduplicate-rapids",
+        action="store_true",
+        help="Deduplicate licenses from known RAPIDS/NVIDIA projects",
+    )
+    copy_parser.add_argument(
+        "--handle-cccl",
+        action="store_true",
+        help="Special handling for CCCL component licenses (skip components if root exists)",
+    )
+    copy_parser.add_argument(
+        "--normalize-years",
+        action="store_true",
+        help="Normalize copyright years for better deduplication",
     )
 
     # Parse arguments
@@ -112,6 +141,8 @@ their full contents in a formatted report.
         sys.argv = ["extract-licenses-via-spdx"] + args.project_path
         if args.with_licenses:
             sys.argv.append("--with-licenses")
+        if args.output:
+            sys.argv.extend(["--output", args.output])
         extract_main()
 
     elif args.command == "copy":
@@ -119,6 +150,14 @@ their full contents in a formatted report.
 
         # Replace sys.argv to pass arguments to the subcommand
         sys.argv = ["find-and-copy-license-files"] + args.project_path
+        if args.output:
+            sys.argv.extend(["--output", args.output])
+        if args.deduplicate_rapids:
+            sys.argv.append("--deduplicate-rapids")
+        if args.handle_cccl:
+            sys.argv.append("--handle-cccl")
+        if args.normalize_years:
+            sys.argv.append("--normalize-years")
         copy_main()
 
     else:

@@ -242,6 +242,13 @@ def main():
         action="store_true",
         help="Include full license text for each license type found",
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=None,
+        help="Write output to file instead of stdout",
+    )
     args = parser.parse_args()
 
     # Validate project paths
@@ -286,121 +293,134 @@ def main():
     print("=" * 60, file=sys.stderr)
     print("Non-NVIDIA Third-Party Licenses:", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
+    if args.output:
+        print(f"Writing output to: {args.output}", file=sys.stderr)
 
     # Get the base path for license files (script directory)
     script_dir = Path(__file__).parent.absolute()
     licenses_base_path = script_dir
 
-    # Print to stdout (can be redirected to a file)
-    # Output header
-    print("=" * 80)
-    print("Non-NVIDIA Third-Party Licenses for specific files")
-    print("=" * 80)
-    print()
-    print("Files are listed with their associated licenses and copyright holders.")
-    print()
+    # Open output file if specified, otherwise use stdout
+    import contextlib
 
-    # Track which license types we found
-    found_licenses = set()
+    @contextlib.contextmanager
+    def output_context(output_file):
+        if output_file:
+            with open(output_file, "w", encoding="utf-8") as f:
+                yield f
+        else:
+            yield sys.stdout
 
-    # Sort files alphabetically for consistent output
-    for filename in sorted(file_map.keys()):
-        file_info = file_map[filename]
-        file_paths = file_info["paths"]
-        license_copyright_set = file_info["licenses"]
+    with output_context(args.output) as out:
+        # Output header
+        print("=" * 80, file=out)
+        print("Non-NVIDIA Third-Party Licenses for specific files", file=out)
+        print("=" * 80, file=out)
+        print(file=out)
+        print("Files are listed with their associated licenses and copyright holders.", file=out)
+        print(file=out)
 
-        print("=" * 80)
-        print(f"File: {filename}")
-        print("=" * 80)
-        print()
+        # Track which license types we found
+        found_licenses = set()
 
-        # Display file locations using project heuristic
-        print("  Locations:")
-        # Group paths by project for cleaner output
-        project_paths = {}
-        for fpath in file_paths:
-            project_name, rel_path = get_project_relative_path(fpath)
-            if project_name:
-                if project_name not in project_paths:
-                    project_paths[project_name] = set()
-                project_paths[project_name].add(rel_path)
-            else:
-                # No project detected, use full path
-                if "unknown" not in project_paths:
-                    project_paths["unknown"] = set()
-                project_paths["unknown"].add(rel_path)
+        # Sort files alphabetically for consistent output
+        for filename in sorted(file_map.keys()):
+            file_info = file_map[filename]
+            file_paths = file_info["paths"]
+            license_copyright_set = file_info["licenses"]
 
-        # Print grouped by project
-        for project in sorted(project_paths.keys()):
-            for rel_path in sorted(project_paths[project]):
-                print(f"    {project}: {rel_path}")
-        print()
+            print("=" * 80, file=out)
+            print(f"File: {filename}", file=out)
+            print("=" * 80, file=out)
+            print(file=out)
 
-        # Group by license type for better readability
-        licenses_dict = {}
-        for license_type, year_range, owner in license_copyright_set:
-            if license_type not in licenses_dict:
-                licenses_dict[license_type] = []
-            licenses_dict[license_type].append((year_range, owner))
-
-            # Track this license type
-            found_licenses.add(license_type)
-
-        # Output each license and its copyrights
-        for license_type in sorted(licenses_dict.keys()):
-            print(f"  License: {license_type}")
-            print()
-
-            # Sort copyrights by owner
-            copyrights = sorted(licenses_dict[license_type], key=lambda x: (x[1], x[0]))
-            for year_range, owner in copyrights:
-                if year_range:
-                    print(f"    Copyright (c) {year_range} {owner}")
+            # Display file locations using project heuristic
+            print("  Locations:", file=out)
+            # Group paths by project for cleaner output
+            project_paths = {}
+            for fpath in file_paths:
+                project_name, rel_path = get_project_relative_path(fpath)
+                if project_name:
+                    if project_name not in project_paths:
+                        project_paths[project_name] = set()
+                    project_paths[project_name].add(rel_path)
                 else:
-                    print(f"    Copyright (c) {owner}")
-            print()
+                    # No project detected, use full path
+                    if "unknown" not in project_paths:
+                        project_paths["unknown"] = set()
+                    project_paths["unknown"].add(rel_path)
 
-        print()
+            # Print grouped by project
+            for project in sorted(project_paths.keys()):
+                for rel_path in sorted(project_paths[project]):
+                    print(f"    {project}: {rel_path}", file=out)
+            print(file=out)
 
-    # Output full license texts if requested
-    if args.with_licenses and found_licenses:
-        print()
-        print("=" * 80)
-        print("FULL LICENSE TEXTS")
-        print("=" * 80)
-        print()
+            # Group by license type for better readability
+            licenses_dict = {}
+            for license_type, year_range, owner in license_copyright_set:
+                if license_type not in licenses_dict:
+                    licenses_dict[license_type] = []
+                licenses_dict[license_type].append((year_range, owner))
 
-        # Track which license files we've already printed
-        printed_license_files = set()
-        # Track unknown licenses to avoid duplicate warnings
-        unknown_licenses = set()
+                # Track this license type
+                found_licenses.add(license_type)
 
-        for license_type in sorted(found_licenses):
-            # Parse compound licenses (e.g., "Apache-2.0 AND MIT" -> ["Apache-2.0", "MIT"])
-            license_components = parse_license_components(license_type)
+            # Output each license and its copyrights
+            for license_type in sorted(licenses_dict.keys()):
+                print(f"  License: {license_type}", file=out)
+                print(file=out)
 
-            for component in license_components:
-                # If we haven't printed this license yet, print it
-                if component not in printed_license_files:
-                    license_text = get_license_text(component, licenses_base_path)
+                # Sort copyrights by owner
+                copyrights = sorted(licenses_dict[license_type], key=lambda x: (x[1], x[0]))
+                for year_range, owner in copyrights:
+                    if year_range:
+                        print(f"    Copyright (c) {year_range} {owner}", file=out)
+                    else:
+                        print(f"    Copyright (c) {owner}", file=out)
+                print(file=out)
 
-                    if license_text:
-                        print("=" * 80)
-                        print(f"{component}")
-                        print("=" * 80)
-                        print(license_text)
-                        print()
-                        printed_license_files.add(component)
-                    elif component not in unknown_licenses:
-                        # Could not fetch license text
-                        print("=" * 80)
-                        print(f"{component}")
-                        print("=" * 80)
-                        print(f"(Full license text not available for {component})")
-                        print()
-                        unknown_licenses.add(component)
+            print(file=out)
 
-        print("=" * 80)
+        # Output full license texts if requested
+        if args.with_licenses and found_licenses:
+            print(file=out)
+            print("=" * 80, file=out)
+            print("FULL LICENSE TEXTS", file=out)
+            print("=" * 80, file=out)
+            print(file=out)
+
+            # Track which license files we've already printed
+            printed_license_files = set()
+            # Track unknown licenses to avoid duplicate warnings
+            unknown_licenses = set()
+
+            for license_type in sorted(found_licenses):
+                # Parse compound licenses (e.g., "Apache-2.0 AND MIT" -> ["Apache-2.0", "MIT"])
+                license_components = parse_license_components(license_type)
+
+                for component in license_components:
+                    # If we haven't printed this license yet, print it
+                    if component not in printed_license_files:
+                        license_text = get_license_text(component, licenses_base_path)
+
+                        if license_text:
+                            print("=" * 80, file=out)
+                            print(f"{component}", file=out)
+                            print("=" * 80, file=out)
+                            print(license_text, file=out)
+                            print(file=out)
+                            printed_license_files.add(component)
+                        elif component not in unknown_licenses:
+                            # Could not fetch license text
+                            print("=" * 80, file=out)
+                            print(f"{component}", file=out)
+                            print("=" * 80, file=out)
+                            print(f"(Full license text not available for {component})", file=out)
+                            print(file=out)
+                            unknown_licenses.add(component)
+
+            print("=" * 80, file=out)
 
 
 if __name__ == "__main__":

@@ -41,8 +41,8 @@ license-builder extract [PROJECT_PATH...] [--with-licenses]
 # Scan a single project
 license-builder extract /path/to/project
 
-# Add full license texts and output to a file
-license-builder extract /path/to/project --with-licenses > third_party_licenses.txt
+# Add full license texts and write to a file
+license-builder extract /path/to/project --with-licenses --output third_party_licenses.txt
 
 # Scan multiple projects
 license-builder extract /path/to/project1 /path/to/project2 --with-licenses
