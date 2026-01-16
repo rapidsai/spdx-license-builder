@@ -65,7 +65,6 @@ def is_rapids_project(path: str) -> bool:
     Returns:
         True if the path contains a RAPIDS project name
     """
-    path.lower()
     path_parts = Path(path).parts
 
     # Check each part of the path
