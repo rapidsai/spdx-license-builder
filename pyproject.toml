@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spdx-license-builder"
+dynamic = ["version"]
+description = "Tools for extracting and managing license information from RAPIDS projects"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "NVIDIA CORPORATION & AFFILIATES"}
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["license", "spdx", "copyright", "license-management"]
+
+# No external dependencies required - uses only Python standard library
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "flake8>=6.0",
+]
+
+[project.scripts]
+# Primary unified CLI
+license-builder = "spdx_license_builder.cli:main"
+
+# Legacy commands (kept for backward compatibility)
+extract-licenses-via-spdx = "spdx_license_builder.extract_licenses_via_spdx:main"
+find-and-copy-license-files = "spdx_license_builder.find_and_copy_license_files:main"
+
+[project.urls]
+Homepage = "https://github.com/rapidsai/spdx-license-builder"
+Documentation = "https://github.com/rapidsai/spdx-license-builder/blob/main/README.md"
+Repository = "https://github.com/rapidsai/spdx-license-builder"
+Issues = "https://github.com/rapidsai/spdx-license-builder/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["spdx_license_builder*"]
+
+[tool.setuptools.package-data]
+spdx_license_builder = [
+    "common_licenses/*.txt",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

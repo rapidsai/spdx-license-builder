@@ -18,7 +18,7 @@ from pathlib import Path
 from collections import OrderedDict
 
 # Import shared utility functions
-from utility import get_project_relative_path, get_license_text
+from .utility import get_project_relative_path, get_license_text
 
 
 def parse_license_components(license_type):

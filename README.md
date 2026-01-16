@@ -4,9 +4,9 @@ This repository contains tools for extracting and managing license information f
 
 ## Overview
 
-There are two main scripts with different purposes:
+The `license-builder` tool provides two main commands:
 
-### 1. `extract_licenses_via_spdx.py` - SPDX Copyright Extractor
+### 1. `license-builder extract` - SPDX Copyright Extractor
 
 Extracts third-party copyright and license information from source code files by parsing SPDX headers.
 Since RAPIDS build directories are under `cpp/` this can be used to extract dependencies SPDX copyright details as well/
@@ -30,22 +30,39 @@ When a license is not found locally, it's automatically fetched from `http://spd
 
 
 **Usage:**
+
+After installation, use the unified command-line tool:
 ```bash
-./extract_licenses_via_spdx.py [PROJECT_PATH...] [--with-licenses]
+license-builder extract [PROJECT_PATH...] [--with-licenses]
 ```
 
 **Examples:**
 ```bash
 # Scan a single project
-./extract_licenses_via_spdx.py /path/to/project
+license-builder extract /path/to/project
 
 # Add full license texts and output to a file
-./extract_licenses_via_spdx.py /path/to/project --with-licenses > third_party_licenses.txt
+license-builder extract /path/to/project --with-licenses > third_party_licenses.txt
+
+# Scan multiple projects
+license-builder extract /path/to/project1 /path/to/project2 --with-licenses
+```
+
+**Alternative usage methods:**
+```bash
+# Legacy command (still works)
+extract-licenses-via-spdx /path/to/project --with-licenses
+
+# Run as Python module
+python -m spdx_license_builder.extract_licenses_via_spdx /path/to/project
+
+# Development (without installation)
+./extract_licenses_via_spdx.py /path/to/project
 ```
 
 ---
 
-### 2. `find_and_copy_license_files.py` - LICENSE File Extractor
+### 2. `license-builder copy` - LICENSE File Extractor
 
 Finds all LICENSE files in project directories and outputs their full contents in a formatted report.
 
@@ -57,20 +74,34 @@ Finds all LICENSE files in project directories and outputs their full contents i
 - Outputs formatted report with full license texts
 
 **Usage:**
+
+After installation, use the unified command-line tool:
 ```bash
-./find_and_copy_license_files.py [PROJECT_PATH...]
+license-builder copy [PROJECT_PATH...]
 ```
 
 **Examples:**
 ```bash
 # Extract LICENSE files from a single project
-./find_and_copy_license_files.py /path/to/project
+license-builder copy /path/to/project
 
 # Extract from multiple projects and combine results
-./find_and_copy_license_files.py /path/to/project1 /path/to/project2
+license-builder copy /path/to/project1 /path/to/project2
 
 # Redirect output to a file
-./find_and_copy_license_files.py /path/to/project > all_licenses.txt
+license-builder copy /path/to/project > all_licenses.txt
+```
+
+**Alternative usage methods:**
+```bash
+# Legacy command (still works)
+find-and-copy-license-files /path/to/project
+
+# Run as Python module
+python -m spdx_license_builder.find_and_copy_license_files /path/to/project
+
+# Development (without installation)
+./find_and_copy_license_files.py /path/to/project
 ```
 
 **Output:** Formatted text report to stdout containing:

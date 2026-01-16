@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 # Import shared utility functions
-from utility import get_project_relative_path, walk_directories_for_files
+from .utility import get_project_relative_path, walk_directories_for_files
 
 
 def extract_license_files(project_paths):
