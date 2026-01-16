@@ -12,9 +12,10 @@ Extracts third-party copyright and license information from source code files by
 Since RAPIDS build directories are under `cpp/` this can be used to extract dependencies SPDX copyright details as well/
 
 **What it does:**
-- Scans source files in `c/` and `cpp/` directories for SPDX copyright tags (`SPDX-FileCopyrightText` and `SPDX-License-Identifier`)
+- Scans entire project directory for SPDX copyright tags (`SPDX-FileCopyrightText` and `SPDX-License-Identifier`)
 - Extracts non-NVIDIA third-party copyright information
 - Optionally includes full license texts (fetched from local cache or SPDX API)
+- Excludes common non-source directories (build/, test/, .git/, etc.)
 
 
 ### License Caching
