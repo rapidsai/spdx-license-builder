@@ -38,6 +38,8 @@ def extract_license_files(project_paths):
     total_files = 0
 
     # Directories to exclude from scanning (common non-source directories)
+    # NOTE: We intentionally DO NOT exclude third-party/thirdparty directories
+    # because that's where dependency licenses are typically stored!
     directories_to_exclude = (
         ".git",
         ".github",
@@ -48,8 +50,6 @@ def extract_license_files(project_paths):
         "venv",
         ".venv",
         "python",
-        "third-party",
-        "thirdparty",
         "cmake",
         "rust",
         "test",
