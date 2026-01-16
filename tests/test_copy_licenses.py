@@ -275,51 +275,187 @@ class TestLicenseFileGrouping:
 
 
 class TestRapidsNvidiaDeduplication:
-    """Tests for potential RAPIDS/NVIDIA project deduplication.
-    
-    These are tests for future enhancements mentioned in requirements.
-    """
+    """Tests for RAPIDS/NVIDIA project deduplication."""
     
     def test_identify_rapids_projects(self):
-        """Test identification of RAPIDS projects (future enhancement)."""
-        # List of known RAPIDS projects
-        rapids_projects = [
-            "cudf", "cuml", "cugraph", "cuspatial", 
-            "cuxfilter", "cucim", "raft", "cuco"
-        ]
+        """Test identification of RAPIDS projects."""
+        from spdx_license_builder.deduplication import is_rapids_project, RAPIDS_PROJECTS
         
-        # For now, just verify the list is available
-        # In future, this could be used for smart deduplication
-        assert len(rapids_projects) > 0
+        # Test known RAPIDS projects
+        assert len(RAPIDS_PROJECTS) > 0
         
-        # TODO: Implement function to detect RAPIDS projects
-        # TODO: Implement deduplication logic for RAPIDS Apache 2.0 licenses
-        pytest.skip("RAPIDS deduplication not yet implemented")
+        # Test path detection
+        assert is_rapids_project("/path/to/raft/cpp/src/file.cpp")
+        assert is_rapids_project("/build/cudf-src/include/header.h")
+        assert is_rapids_project("/home/user/cuco/LICENSE")
+        
+        # Test non-RAPIDS paths
+        assert not is_rapids_project("/path/to/random/file.cpp")
+        assert not is_rapids_project("/home/user/myproject/src/code.cpp")
+    
+    def test_deduplicate_rapids_licenses(self, tmp_path):
+        """Test deduplication of RAPIDS Apache 2.0 licenses."""
+        from spdx_license_builder.deduplication import should_deduplicate_rapids_license
+        
+        apache_license = """Apache License
+Version 2.0, January 2004
+
+Copyright (c) 2020-2023, NVIDIA CORPORATION.
+
+Licensed under the Apache License, Version 2.0..."""
+        
+        # RAPIDS paths should be deduplicated
+        rapids_paths = {
+            "/path/to/raft/LICENSE",
+            "/path/to/cudf/LICENSE"
+        }
+        assert should_deduplicate_rapids_license(rapids_paths, apache_license)
+        
+        # Mixed RAPIDS and non-RAPIDS should not be deduplicated
+        mixed_paths = {
+            "/path/to/raft/LICENSE",
+            "/path/to/other/LICENSE"
+        }
+        assert not should_deduplicate_rapids_license(mixed_paths, apache_license)
+        
+        # Non-Apache license should not be deduplicated
+        mit_license = "MIT License..."
+        assert not should_deduplicate_rapids_license(rapids_paths, mit_license)
     
     def test_cccl_special_handling(self):
-        """Test special handling of CCCL licenses (future enhancement)."""
-        # CCCL has a root LICENSE that combines all sub-component licenses
-        # Sub-components: cub, thrust, libcudacxx
+        """Test special handling of CCCL licenses."""
+        from spdx_license_builder.deduplication import (
+            is_cccl_component,
+            is_cccl_root,
+            should_skip_cccl_component_license
+        )
         
-        # TODO: Implement CCCL detection
-        # TODO: Implement logic to recognize root vs sub-component licenses
-        # TODO: Only include root license when all sub-components are present
-        pytest.skip("CCCL special handling not yet implemented")
+        # Test component detection
+        assert is_cccl_component("/path/to/cccl/thrust/LICENSE") == "thrust"
+        assert is_cccl_component("/path/to/cccl/cub/LICENSE") == "cub"
+        assert is_cccl_component("/path/to/cccl/libcudacxx/LICENSE") == "libcudacxx"
+        assert is_cccl_component("/path/to/other/LICENSE") is None
+        
+        # Test root detection
+        assert is_cccl_root("/path/to/cccl/LICENSE")
+        assert is_cccl_root("/build/cccl-src/LICENSE")
+        assert not is_cccl_root("/path/to/cccl/thrust/LICENSE")
+        assert not is_cccl_root("/path/to/other/LICENSE")
+        
+        # Test skip logic
+        all_paths = {
+            "/path/to/cccl/LICENSE",
+            "/path/to/cccl/thrust/LICENSE",
+            "/path/to/cccl/cub/LICENSE"
+        }
+        
+        # Component should be skipped when root exists
+        assert should_skip_cccl_component_license("/path/to/cccl/thrust/LICENSE", all_paths)
+        assert should_skip_cccl_component_license("/path/to/cccl/cub/LICENSE", all_paths)
+        
+        # Root should not be skipped
+        assert not should_skip_cccl_component_license("/path/to/cccl/LICENSE", all_paths)
+        
+        # Without root, components should not be skipped
+        paths_no_root = {
+            "/path/to/cccl/thrust/LICENSE",
+            "/path/to/cccl/cub/LICENSE"
+        }
+        assert not should_skip_cccl_component_license("/path/to/cccl/thrust/LICENSE", paths_no_root)
 
 
 class TestLicenseYearNormalization:
-    """Tests for year normalization in license deduplication (future enhancement)."""
+    """Tests for year normalization in license deduplication."""
     
-    def test_normalize_license_years(self):
+    def test_normalize_copyright_years(self):
         """Test normalizing copyright years for deduplication."""
-        # This is a potential future enhancement
+        from spdx_license_builder.deduplication import normalize_copyright_years
         
+        # Year ranges should be normalized
         license1 = "Copyright (c) 2020-2023, NVIDIA CORPORATION."
         license2 = "Copyright (c) 2022-2024, NVIDIA CORPORATION."
         
-        # TODO: Implement function to normalize years
-        # normalized1 = normalize_license_text(license1)
-        # normalized2 = normalize_license_text(license2)
-        # assert normalized1 == normalized2
+        normalized1 = normalize_copyright_years(license1)
+        normalized2 = normalize_copyright_years(license2)
         
-        pytest.skip("Year normalization not yet implemented")
+        # Both should have the same normalized form
+        assert normalized1 == normalized2
+        assert "YYYY" in normalized1
+        assert "2020" not in normalized1
+        assert "2023" not in normalized1
+    
+    def test_normalize_various_formats(self):
+        """Test normalization of various copyright year formats."""
+        from spdx_license_builder.deduplication import normalize_copyright_years
+        
+        test_cases = [
+            ("Copyright (c) 2020 Company", "Copyright (c) YYYY Company"),
+            ("Copyright (C) 2020-2023 Company", "Copyright (c) YYYY Company"),
+            ("Copyright 2020 Company", "Copyright YYYY Company"),
+            ("Copyright (c) 2020, 2021, 2022 Company", "Copyright (c) YYYY Company"),
+        ]
+        
+        for original, expected in test_cases:
+            result = normalize_copyright_years(original)
+            assert "YYYY" in result
+            # Year should be replaced
+            assert not any(str(year) in result for year in range(2000, 2030))
+    
+    def test_compute_normalized_hash(self):
+        """Test that normalized hashes match for licenses differing only in years."""
+        from spdx_license_builder.deduplication import compute_normalized_hash
+        
+        license1 = """Apache License
+Copyright (c) 2020-2023, NVIDIA CORPORATION.
+Licensed under the Apache License..."""
+        
+        license2 = """Apache License
+Copyright (c) 2022-2024, NVIDIA CORPORATION.
+Licensed under the Apache License..."""
+        
+        # Hashes should match after normalization
+        hash1 = compute_normalized_hash(license1)
+        hash2 = compute_normalized_hash(license2)
+        
+        assert hash1 == hash2
+    
+    def test_group_licenses_with_year_normalization(self, tmp_path):
+        """Test grouping licenses with year normalization enabled."""
+        from spdx_license_builder.deduplication import group_licenses_with_deduplication
+        import hashlib
+        
+        license_template = """Apache License
+Copyright (c) {year}, NVIDIA CORPORATION.
+Licensed under the Apache License, Version 2.0..."""
+        
+        license1 = license_template.format(year="2020-2023")
+        license2 = license_template.format(year="2022-2024")
+        
+        # Create content map with two licenses differing only in years
+        content_map = {
+            hashlib.sha256(license1.encode()).hexdigest(): {
+                'content': license1,
+                'filenames': {'LICENSE'},
+                'paths': {'/path1/LICENSE': 'path1/LICENSE'}
+            },
+            hashlib.sha256(license2.encode()).hexdigest(): {
+                'content': license2,
+                'filenames': {'LICENSE'},
+                'paths': {'/path2/LICENSE': 'path2/LICENSE'}
+            }
+        }
+        
+        # With year normalization, should be deduplicated
+        result = group_licenses_with_deduplication(
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=False,
+            handle_cccl=False
+        )
+        
+        # Should be merged into one
+        assert len(result) == 1
+        
+        # Should have both paths
+        for info in result.values():
+            assert len(info['paths']) == 2

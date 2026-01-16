@@ -21,9 +21,29 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = _version_file.read_text().strip()
 
 from .utility import get_project_relative_path, get_license_text, walk_directories_for_files
+from .deduplication import (
+    normalize_copyright_years,
+    compute_normalized_hash,
+    is_rapids_project,
+    is_nvidia_project,
+    is_cccl_component,
+    is_cccl_root,
+    should_deduplicate_rapids_license,
+    should_skip_cccl_component_license,
+    group_licenses_with_deduplication,
+)
 
 __all__ = [
     'get_project_relative_path',
     'get_license_text',
     'walk_directories_for_files',
+    'normalize_copyright_years',
+    'compute_normalized_hash',
+    'is_rapids_project',
+    'is_nvidia_project',
+    'is_cccl_component',
+    'is_cccl_root',
+    'should_deduplicate_rapids_license',
+    'should_skip_cccl_component_license',
+    'group_licenses_with_deduplication',
 ]

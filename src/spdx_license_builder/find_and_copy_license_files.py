@@ -112,6 +112,42 @@ def main():
         nargs='+',
         help='Path(s) to the project root directory/directories to scan'
     )
+    parser.add_argument(
+        '--deduplicate-rapids',
+        action='store_true',
+        default=True,
+        help='Deduplicate RAPIDS Apache-2.0 licenses (default: enabled)'
+    )
+    parser.add_argument(
+        '--no-deduplicate-rapids',
+        action='store_false',
+        dest='deduplicate_rapids',
+        help='Disable RAPIDS license deduplication'
+    )
+    parser.add_argument(
+        '--handle-cccl',
+        action='store_true',
+        default=True,
+        help='Skip CCCL component licenses when root exists (default: enabled)'
+    )
+    parser.add_argument(
+        '--no-handle-cccl',
+        action='store_false',
+        dest='handle_cccl',
+        help='Disable CCCL special handling'
+    )
+    parser.add_argument(
+        '--normalize-years',
+        action='store_true',
+        default=True,
+        help='Normalize copyright years for better deduplication (default: enabled)'
+    )
+    parser.add_argument(
+        '--no-normalize-years',
+        action='store_false',
+        dest='normalize_years',
+        help='Disable year normalization'
+    )
     args = parser.parse_args()
 
     # Validate project paths
@@ -137,6 +173,19 @@ def main():
     if not content_map:
         print("No LICENSE files found.", file=sys.stderr)
         return
+    
+    # Apply advanced deduplication
+    from .deduplication import group_licenses_with_deduplication
+    
+    content_map = group_licenses_with_deduplication(
+        content_map,
+        use_year_normalization=args.normalize_years,
+        deduplicate_rapids=args.deduplicate_rapids,
+        handle_cccl=args.handle_cccl
+    )
+    
+    print(f"Applied deduplication (RAPIDS: {args.deduplicate_rapids}, "
+          f"CCCL: {args.handle_cccl}, Years: {args.normalize_years})", file=sys.stderr)
 
     # Sort by the first filename found for each unique content for consistent output
     sorted_items = sorted(content_map.items(), key=lambda x: sorted(x[1]['filenames'])[0])
