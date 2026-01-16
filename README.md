@@ -48,16 +48,10 @@ license-builder extract /path/to/project --with-licenses --output third_party_li
 license-builder extract /path/to/project1 /path/to/project2 --with-licenses
 ```
 
-**Alternative usage methods:**
+**Alternative usage:**
 ```bash
-# Legacy command (still works)
-extract-licenses-via-spdx /path/to/project --with-licenses
-
 # Run as Python module
-python -m spdx_license_builder.extract_licenses_via_spdx /path/to/project
-
-# Development (without installation)
-./extract_licenses_via_spdx.py /path/to/project
+python -m spdx_license_builder extract /path/to/project --with-licenses
 ```
 
 ---
@@ -92,16 +86,10 @@ license-builder copy /path/to/project1 /path/to/project2
 license-builder copy /path/to/project --output all_licenses.txt
 ```
 
-**Alternative usage methods:**
+**Alternative usage:**
 ```bash
-# Legacy command (still works)
-find-and-copy-license-files /path/to/project
-
 # Run as Python module
-python -m spdx_license_builder.find_and_copy_license_files /path/to/project
-
-# Development (without installation)
-./find_and_copy_license_files.py /path/to/project
+python -m spdx_license_builder copy /path/to/project
 ```
 
 **Output:** Formatted text report to stdout containing:

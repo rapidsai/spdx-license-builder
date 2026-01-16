@@ -165,53 +165,25 @@ class TestUnifiedCLI:
         assert len(captured.out) > 0 or len(captured.err) > 0
 
 
-class TestLegacyCommands:
-    """Test that legacy commands still work."""
+class TestModuleExecution:
+    """Test running as Python module."""
 
-    def test_extract_legacy_command_exists(self):
-        """Test that legacy extract command is importable."""
-        from spdx_license_builder.extract_licenses_via_spdx import main
+    def test_module_main_help(self, monkeypatch, capsys):
+        """Test python -m spdx_license_builder shows help."""
+        from spdx_license_builder.__main__ import main
 
-        assert callable(main)
-
-    def test_copy_legacy_command_exists(self):
-        """Test that legacy copy command is importable."""
-        from spdx_license_builder.find_and_copy_license_files import main
-
-        assert callable(main)
-
-    def test_legacy_extract_help(self, monkeypatch, capsys):
-        """Test legacy extract command help."""
-        from spdx_license_builder.extract_licenses_via_spdx import main
-
-        monkeypatch.setattr(sys, "argv", ["extract-licenses-via-spdx", "--help"])
+        monkeypatch.setattr(sys, "argv", ["spdx_license_builder", "--help"])
 
         with pytest.raises(SystemExit) as exc_info:
             main()
 
+        # --help should exit with code 0
         assert exc_info.value.code == 0
 
         captured = capsys.readouterr()
-        output = captured.out
-
-        assert "project_path" in output
-        assert "--with-licenses" in output
-
-    def test_legacy_copy_help(self, monkeypatch, capsys):
-        """Test legacy copy command help."""
-        from spdx_license_builder.find_and_copy_license_files import main
-
-        monkeypatch.setattr(sys, "argv", ["find-and-copy-license-files", "--help"])
-
-        with pytest.raises(SystemExit) as exc_info:
-            main()
-
-        assert exc_info.value.code == 0
-
-        captured = capsys.readouterr()
-        output = captured.out
-
-        assert "project_path" in output
+        assert "license-builder" in captured.out
+        assert "extract" in captured.out
+        assert "copy" in captured.out
 
 
 class TestCLIEdgeCases:
