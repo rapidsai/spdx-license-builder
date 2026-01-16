@@ -414,8 +414,6 @@ Licensed under the Apache License..."""
 
     def test_group_licenses_with_year_normalization(self, tmp_path):
         """Test grouping licenses with year normalization enabled."""
-        import hashlib
-
         from spdx_license_builder.deduplication import group_licenses_with_deduplication
 
         license_template = """Apache License
