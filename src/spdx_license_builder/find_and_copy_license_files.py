@@ -37,9 +37,16 @@ def extract_license_files(project_paths):
     content_map = {}
     total_files = 0
 
-    # Directories to scan within each project (same as extract_licenses_via_spdx.py)
-    directories_to_scan = ["c", "cpp"]
+    # Directories to exclude from scanning (common non-source directories)
     directories_to_exclude = (
+        ".git",
+        ".github",
+        "build",
+        "dist",
+        "_build",
+        "node_modules",
+        "venv",
+        ".venv",
         "python",
         "third-party",
         "thirdparty",
@@ -49,22 +56,17 @@ def extract_license_files(project_paths):
         "tests",
         "benchmark",
         "benchmarks",
+        "docs",
+        "examples",
     )
 
     for project_path in project_paths:
         print(f"Scanning project: {project_path}", file=sys.stderr)
 
-        matching_files = []
-        for directory in directories_to_scan:
-            dir_path = os.path.join(str(project_path), directory)
-            if not os.path.exists(dir_path):
-                print(f"Warning: Directory '{dir_path}' does not exist", file=sys.stderr)
-                continue
-
-            # Find all files starting with LICENSE
-            matching_files.extend(
-                walk_directories_for_files(dir_path, directories_to_exclude, "LICENSE")
-            )
+        # Find all files starting with LICENSE in the entire project
+        matching_files = walk_directories_for_files(
+            str(project_path), directories_to_exclude, "LICENSE"
+        )
 
         print(f"Found {len(matching_files)} LICENSE file(s)", file=sys.stderr)
         total_files += len(matching_files)

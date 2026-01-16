@@ -268,9 +268,24 @@ def main():
 
         project_paths.append(project_path)
 
-    # Look for 'c' and 'cpp' directories within the project
-    directories_to_scan = ["c", "cpp"]
-    directories_to_exclude = ("benchmark", "cmake", "test", "tests")
+    # Directories to exclude from scanning (common non-source directories)
+    directories_to_exclude = (
+        ".git",
+        ".github",
+        "build",
+        "dist",
+        "_build",
+        "node_modules",
+        "venv",
+        ".venv",
+        "benchmark",
+        "benchmarks",
+        "cmake",
+        "test",
+        "tests",
+        "docs",
+        "examples",
+    )
 
     print(f"Project path(s): {', '.join(str(p) for p in project_paths)}", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
@@ -278,19 +293,15 @@ def main():
     # Collect all unique SPDX entries organized by filename from all project paths
     file_map = {}
     for project_path in project_paths:
-        for directory in directories_to_scan:
-            dir_path = os.path.join(str(project_path), directory)
-            if not os.path.exists(dir_path):
-                print(f"Warning: Directory '{dir_path}' does not exist", file=sys.stderr)
-                continue
-            path_file_map = walk_directories(dir_path, directories_to_exclude)
+        print(f"Scanning directory: {project_path}", file=sys.stderr)
+        path_file_map = walk_directories(str(project_path), directories_to_exclude)
 
-            # Merge results from this path into the main file_map
-            for filename, file_info in path_file_map.items():
-                if filename not in file_map:
-                    file_map[filename] = {"paths": set(), "licenses": set()}
-                file_map[filename]["paths"].update(file_info["paths"])
-                file_map[filename]["licenses"].update(file_info["licenses"])
+        # Merge results from this path into the main file_map
+        for filename, file_info in path_file_map.items():
+            if filename not in file_map:
+                file_map[filename] = {"paths": set(), "licenses": set()}
+            file_map[filename]["paths"].update(file_info["paths"])
+            file_map[filename]["licenses"].update(file_info["licenses"])
 
     # Output the results
     print("=" * 60, file=sys.stderr)
