@@ -54,6 +54,38 @@ license-builder extract /path/to/project1 /path/to/project2 --with-licenses
 python -m spdx_license_builder extract /path/to/project --with-licenses
 ```
 
+**Example output:**
+```
+================================================================================
+Non-NVIDIA Third-Party Licenses for specific files
+================================================================================
+
+Files are listed with their associated licenses and copyright holders.
+
+================================================================================
+File: another_facebook_file.cuh
+================================================================================
+
+  Locations:
+    test_project: cpp/include/another_facebook_file.cuh
+
+  License: Apache-2.0 AND MIT
+
+    Copyright (c) Facebook, Inc. and its affiliates
+
+
+================================================================================
+File: bsd_file.h
+================================================================================
+
+  Locations:
+    test_project: cpp/include/bsd_file.h
+
+  License: BSD-3-Clause
+
+    Copyright (c) 2020-2023 Example Corporation
+```
+
 ---
 
 ### 2. `license-builder copy` - LICENSE File Extractor
@@ -92,9 +124,42 @@ license-builder copy /path/to/project --output all_licenses.txt
 python -m spdx_license_builder copy /path/to/project
 ```
 
-**Output:** Formatted text report to stdout containing:
+**Example output:**
+```
+================================================================================
+  Locations:
+    project: cpp/third_party/fmt/LICENSE
+
+  License Text:
+
+    Copyright (c) 2012 - present, Victor Zverovich
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================================
+```
+
+**Output format:**
 - File locations organized by project
 - Full license text from each LICENSE file
+- Automatic deduplication (identical licenses shown once with all locations)
 
 
 ---
