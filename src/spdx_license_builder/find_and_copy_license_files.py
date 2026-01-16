@@ -97,8 +97,11 @@ def extract_license_files(project_paths):
                 content_map[content_hash]["filenames"].add(filename)
                 content_map[content_hash]["paths"][file_path] = relative_path
 
-            except Exception as e:
+            except (OSError, UnicodeDecodeError) as e:
                 print(f"Warning: Could not read {file_path}: {e}", file=sys.stderr)
+            except Exception as e:
+                print(f"Unexpected error reading {file_path}: {e}", file=sys.stderr)
+                raise
 
     print(f"Found {total_files} total LICENSE files", file=sys.stderr)
     print(f"Found {len(content_map)} unique LICENSE contents", file=sys.stderr)

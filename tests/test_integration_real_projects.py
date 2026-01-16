@@ -44,9 +44,12 @@ def download_license(repo, branch, license_path, timeout=10):
     try:
         with urllib.request.urlopen(url, timeout=timeout) as response:
             return response.read().decode("utf-8")
-    except Exception as e:
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
         print(f"Failed to download {url}: {e}")
         return None
+    except Exception as e:
+        print(f"Unexpected error downloading {url}: {e}")
+        raise
 
 
 @pytest.fixture(scope="module")

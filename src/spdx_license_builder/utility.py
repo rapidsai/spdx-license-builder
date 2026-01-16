@@ -97,8 +97,11 @@ def get_license_text(license_type, base_path):
             try:
                 with open(license_path, encoding="utf-8") as f:
                     return f.read()
-            except Exception as e:
+            except (OSError, UnicodeDecodeError) as e:
                 print(f"Warning: Could not read license file {license_path}: {e}", file=sys.stderr)
+            except Exception as e:
+                print(f"Unexpected error reading {license_path}: {e}", file=sys.stderr)
+                raise
 
     # Fetch from SPDX API
     spdx_url = f"http://spdx.org/licenses/{license_id}.json"
@@ -118,10 +121,13 @@ def get_license_text(license_type, base_path):
                     with open(cache_path, "w", encoding="utf-8") as f:
                         f.write(license_text)
                     print(f"Cached license {license_id} to {cache_path}", file=sys.stderr)
-                except Exception as e:
+                except OSError as e:
                     print(
                         f"Warning: Could not cache license file {cache_path}: {e}", file=sys.stderr
                     )
+                except Exception as e:
+                    print(f"Unexpected error caching {cache_path}: {e}", file=sys.stderr)
+                    raise
 
                 return license_text
             else:
@@ -137,9 +143,12 @@ def get_license_text(license_type, base_path):
             file=sys.stderr,
         )
         return None
-    except Exception as e:
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
         print(f"Warning: Error fetching license {license_id} from SPDX API: {e}", file=sys.stderr)
         return None
+    except Exception as e:
+        print(f"Unexpected error fetching {license_id}: {e}", file=sys.stderr)
+        raise
 
 
 def walk_directories_for_files(dir_path, directories_to_exclude, file_pattern):

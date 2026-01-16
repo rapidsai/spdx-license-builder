@@ -176,9 +176,12 @@ def find_spdx_entries(file_path):
                 else:
                     i += 1
 
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         # Skip files that can't be read
         pass
+    except Exception as e:
+        print(f"Unexpected error reading {file_path}: {e}", file=sys.stderr)
+        raise
 
     return entries
 
