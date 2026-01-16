@@ -19,12 +19,12 @@ Since RAPIDS build directories are under `cpp/` this can be used to extract depe
 
 ### License Caching
 
-License texts are cached in two directories:
+License texts are cached in two locations:
 
-- **`common_licenses/`** - Frequently used licenses (commited into the project)
-- **`infrequent_licenses/`** - Dynamically fetched licenses (auto-created, checked second)
+- **Bundled licenses** - Common licenses (Apache-2.0, MIT, BSD-3-Clause) are bundled with the package
+- **`infrequent_licenses/`** - Dynamically fetched licenses (auto-created in current directory)
 
-When a license is not found locally, it's automatically fetched from `http://spdx.org/licenses/[licenseID].json` and cached in `infrequent_licenses/`.
+When a license is not found in the bundled cache, it's automatically fetched from `http://spdx.org/licenses/[licenseID].json` and cached in `infrequent_licenses/` for future use.
 
 ---
 
