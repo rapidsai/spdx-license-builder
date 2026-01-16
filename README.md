@@ -115,4 +115,3 @@ python -m spdx_license_builder.find_and_copy_license_files /path/to/project
 
 SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 SPDX-License-Identifier: Apache-2.0
-

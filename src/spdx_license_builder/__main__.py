@@ -8,7 +8,6 @@
 Main entry point when running as: python -m spdx_license_builder
 """
 
-import sys
 
 def main():
     print("SPDX License Builder Tools")
@@ -30,6 +29,7 @@ def main():
     print("Or run as modules:")
     print("  python -m spdx_license_builder.extract_licenses_via_spdx")
     print("  python -m spdx_license_builder.find_and_copy_license_files")
+
 
 if __name__ == "__main__":
     main()

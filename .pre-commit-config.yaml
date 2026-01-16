@@ -1,0 +1,70 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+
+repos:
+  # General file fixers
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-case-conflict
+        name: Check for case conflicts
+      - id: mixed-line-ending
+        name: Fix mixed line endings
+        args: ['--fix=lf']
+      - id: check-executables-have-shebangs
+        name: Check executables have shebangs
+
+  # Python linting and formatting with Ruff (replaces black, flake8, isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Run the linter
+      - id: ruff
+        name: Lint with ruff
+        args: ['--fix', '--unsafe-fixes']
+      # Run the formatter
+      - id: ruff-format
+        name: Format with ruff
+
+  # Run tests (fast enough to include in pre-commit)
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: Run pytest
+        entry: pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: ['-q', '--tb=line']
+        stages: [commit]
+
+      - id: pytest-cov
+        name: Run pytest with coverage (push only)
+        entry: pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: ['--cov=spdx_license_builder', '--cov-report=term-missing:skip-covered', '--cov-fail-under=80']
+        stages: [push]
+
+# Global settings
+default_language_version:
+  python: python3
+
+# Don't fail on first error, run all hooks
+fail_fast: false

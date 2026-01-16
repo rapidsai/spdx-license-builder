@@ -15,10 +15,9 @@ import os
 import re
 import sys
 from pathlib import Path
-from collections import OrderedDict
 
 # Import shared utility functions
-from .utility import get_project_relative_path, get_license_text
+from .utility import get_license_text, get_project_relative_path
 
 
 def parse_license_components(license_type):
@@ -37,7 +36,7 @@ def parse_license_components(license_type):
     components = []
 
     # Split by AND/OR operators (case insensitive)
-    parts = re.split(r'\s+(?:AND|OR|WITH)\s+', license_type, flags=re.IGNORECASE)
+    parts = re.split(r"\s+(?:AND|OR|WITH)\s+", license_type, flags=re.IGNORECASE)
 
     for part in parts:
         part = part.strip()
@@ -57,40 +56,52 @@ def extract_copyright_info(line):
       "Copyright (c) Facebook, Inc. and its affiliates." -> ("", "Facebook, Inc. and its affiliates")
     """
     # Pattern 1: Copyright (c) <year> <owner> or Copyright (C) <year> <owner>
-    match = re.search(r'Copyright\s*\([cC]\)\s*([\d\-,\s]+)\s+(.+?)(?:\.\s*All rights reserved\.?)?$', line, re.IGNORECASE)
+    match = re.search(
+        r"Copyright\s*\([cC]\)\s*([\d\-,\s]+)\s+(.+?)(?:\.\s*All rights reserved\.?)?$",
+        line,
+        re.IGNORECASE,
+    )
     if match:
         years = match.group(1).strip()
         owner = match.group(2).strip()
         # Clean up trailing punctuation
-        owner = owner.rstrip('.,;')
+        owner = owner.rstrip(".,;")
         return (years, owner)
 
     # Pattern 2: Copyright (<year>) <owner> (no 'c')
-    match = re.search(r'Copyright\s*\(([\d\-,\s]+)\)\s+(.+?)(?:\.\s*All rights reserved\.?)?$', line, re.IGNORECASE)
+    match = re.search(
+        r"Copyright\s*\(([\d\-,\s]+)\)\s+(.+?)(?:\.\s*All rights reserved\.?)?$",
+        line,
+        re.IGNORECASE,
+    )
     if match:
         years = match.group(1).strip()
         owner = match.group(2).strip()
         # Clean up trailing punctuation
-        owner = owner.rstrip('.,;')
+        owner = owner.rstrip(".,;")
         return (years, owner)
 
     # Pattern 3: Copyright (c) <owner> (no year)
-    match = re.search(r'Copyright\s*\([cC]\)\s+(.+?)(?:\.\s*All rights reserved\.?)?$', line, re.IGNORECASE)
+    match = re.search(
+        r"Copyright\s*\([cC]\)\s+(.+?)(?:\.\s*All rights reserved\.?)?$", line, re.IGNORECASE
+    )
     if match:
         owner = match.group(1).strip()
         # Clean up trailing punctuation
-        owner = owner.rstrip('.,;')
+        owner = owner.rstrip(".,;")
         return ("", owner)
 
     # Pattern 4: Copyright <year> <owner> (no parentheses)
-    match = re.search(r'Copyright\s+([\d\-,\s]+)\s+(.+?)(?:\.\s*All rights reserved\.?)?$', line, re.IGNORECASE)
+    match = re.search(
+        r"Copyright\s+([\d\-,\s]+)\s+(.+?)(?:\.\s*All rights reserved\.?)?$", line, re.IGNORECASE
+    )
     if match:
         # Check if first group is actually a year
         potential_year = match.group(1).strip()
-        if re.match(r'^[\d\-,\s]+$', potential_year):
+        if re.match(r"^[\d\-,\s]+$", potential_year):
             years = potential_year
             owner = match.group(2).strip()
-            owner = owner.rstrip('.,;')
+            owner = owner.rstrip(".,;")
             return (years, owner)
 
     return None
@@ -106,7 +117,7 @@ def find_spdx_entries(file_path):
     entries = []
 
     try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
             i = 0
@@ -114,9 +125,9 @@ def find_spdx_entries(file_path):
                 line = lines[i].strip()
 
                 # Look for SPDX-FileCopyrightText
-                if 'SPDX-FileCopyrightText:' in line:
+                if "SPDX-FileCopyrightText:" in line:
                     # Check if it contains NVIDIA
-                    if 'NVIDIA' in line.upper():
+                    if "NVIDIA" in line.upper():
                         i += 1
                         continue
 
@@ -134,13 +145,15 @@ def find_spdx_entries(file_path):
                         next_line = lines[i].strip()
 
                         # If we hit a license identifier, associate it with all copyrights
-                        if 'SPDX-License-Identifier:' in next_line:
+                        if "SPDX-License-Identifier:" in next_line:
                             # Extract the license type
-                            license_match = re.search(r'SPDX-License-Identifier:\s*(.+?)(?:\s*$)', next_line)
+                            license_match = re.search(
+                                r"SPDX-License-Identifier:\s*(.+?)(?:\s*$)", next_line
+                            )
                             if license_match:
                                 license_type = license_match.group(1).strip()
                                 # Clean up any trailing comment markers
-                                license_type = re.sub(r'[*/\s]+$', '', license_type)
+                                license_type = re.sub(r"[*/\s]+$", "", license_type)
 
                                 # Associate this license with all collected copyrights
                                 for year_range, owner in copyrights:
@@ -148,8 +161,8 @@ def find_spdx_entries(file_path):
                             break
 
                         # If we hit another FileCopyrightText (non-NVIDIA), collect it
-                        elif 'SPDX-FileCopyrightText:' in next_line:
-                            if 'NVIDIA' not in next_line.upper():
+                        elif "SPDX-FileCopyrightText:" in next_line:
+                            if "NVIDIA" not in next_line.upper():
                                 copyright_info = extract_copyright_info(next_line)
                                 if copyright_info:
                                     copyrights.append(copyright_info)
@@ -163,7 +176,7 @@ def find_spdx_entries(file_path):
                 else:
                     i += 1
 
-    except Exception as e:
+    except Exception:
         # Skip files that can't be read
         pass
 
@@ -198,14 +211,11 @@ def walk_directories(dir_path, directories_to_exclude):
                 filename = os.path.basename(fpath)
 
                 if filename not in file_map:
-                    file_map[filename] = {
-                        'paths': set(),
-                        'licenses': set()
-                    }
+                    file_map[filename] = {"paths": set(), "licenses": set()}
 
                 # Store the file path and license info
-                file_map[filename]['paths'].add(fpath)
-                file_map[filename]['licenses'].add((license_type, year_range, owner))
+                file_map[filename]["paths"].add(fpath)
+                file_map[filename]["licenses"].add((license_type, year_range, owner))
 
     unique_files = len(file_map)
     print(f"Scanned {file_count} files", file=sys.stderr)
@@ -219,18 +229,18 @@ def main():
     """Main function to extract and output SPDX entries."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description='Extract non-NVIDIA third-party SPDX license information from source code.'
+        description="Extract non-NVIDIA third-party SPDX license information from source code."
     )
     parser.add_argument(
-        'project_path',
+        "project_path",
         type=str,
-        nargs='+',
-        help='Path(s) to the project root directory/directories to scan'
+        nargs="+",
+        help="Path(s) to the project root directory/directories to scan",
     )
     parser.add_argument(
-        '--with-licenses',
-        action='store_true',
-        help='Include full license text for each license type found'
+        "--with-licenses",
+        action="store_true",
+        help="Include full license text for each license type found",
     )
     args = parser.parse_args()
 
@@ -258,7 +268,6 @@ def main():
     # Collect all unique SPDX entries organized by filename from all project paths
     file_map = {}
     for project_path in project_paths:
-
         for directory in directories_to_scan:
             dir_path = os.path.join(str(project_path), directory)
             if not os.path.exists(dir_path):
@@ -269,12 +278,9 @@ def main():
             # Merge results from this path into the main file_map
             for filename, file_info in path_file_map.items():
                 if filename not in file_map:
-                    file_map[filename] = {
-                        'paths': set(),
-                        'licenses': set()
-                    }
-                file_map[filename]['paths'].update(file_info['paths'])
-                file_map[filename]['licenses'].update(file_info['licenses'])
+                    file_map[filename] = {"paths": set(), "licenses": set()}
+                file_map[filename]["paths"].update(file_info["paths"])
+                file_map[filename]["licenses"].update(file_info["licenses"])
 
     # Output the results
     print("=" * 60, file=sys.stderr)
@@ -300,8 +306,8 @@ def main():
     # Sort files alphabetically for consistent output
     for filename in sorted(file_map.keys()):
         file_info = file_map[filename]
-        file_paths = file_info['paths']
-        license_copyright_set = file_info['licenses']
+        file_paths = file_info["paths"]
+        license_copyright_set = file_info["licenses"]
 
         print("=" * 80)
         print(f"File: {filename}")
@@ -320,9 +326,9 @@ def main():
                 project_paths[project_name].add(rel_path)
             else:
                 # No project detected, use full path
-                if 'unknown' not in project_paths:
-                    project_paths['unknown'] = set()
-                project_paths['unknown'].add(rel_path)
+                if "unknown" not in project_paths:
+                    project_paths["unknown"] = set()
+                project_paths["unknown"].add(rel_path)
 
         # Print grouped by project
         for project in sorted(project_paths.keys()):
@@ -399,4 +405,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

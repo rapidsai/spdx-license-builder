@@ -39,7 +39,17 @@ def extract_license_files(project_paths):
 
     # Directories to scan within each project (same as extract_licenses_via_spdx.py)
     directories_to_scan = ["c", "cpp"]
-    directories_to_exclude = ("python", "third-party", "thirdparty", "cmake", "rust", "test", "tests", "benchmark", "benchmarks")
+    directories_to_exclude = (
+        "python",
+        "third-party",
+        "thirdparty",
+        "cmake",
+        "rust",
+        "test",
+        "tests",
+        "benchmark",
+        "benchmarks",
+    )
 
     for project_path in project_paths:
         print(f"Scanning project: {project_path}", file=sys.stderr)
@@ -53,11 +63,7 @@ def extract_license_files(project_paths):
 
             # Find all files starting with LICENSE
             matching_files.extend(
-                walk_directories_for_files(
-                    dir_path,
-                    directories_to_exclude,
-                    "LICENSE"
-                )
+                walk_directories_for_files(dir_path, directories_to_exclude, "LICENSE")
             )
 
         print(f"Found {len(matching_files)} LICENSE file(s)", file=sys.stderr)
@@ -73,23 +79,23 @@ def extract_license_files(project_paths):
 
             # Read the license content
             try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                with open(file_path, encoding="utf-8", errors="ignore") as f:
                     content = f.read()
 
                 # Compute hash of content to use as key
-                content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+                content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
                 # Use hash as the key to group identical licenses
                 if content_hash not in content_map:
                     content_map[content_hash] = {
-                        'content': content,
-                        'filenames': set(),
-                        'paths': {}
+                        "content": content,
+                        "filenames": set(),
+                        "paths": {},
                     }
 
                 # Track the filename and path for this content
-                content_map[content_hash]['filenames'].add(filename)
-                content_map[content_hash]['paths'][file_path] = relative_path
+                content_map[content_hash]["filenames"].add(filename)
+                content_map[content_hash]["paths"][file_path] = relative_path
 
             except Exception as e:
                 print(f"Warning: Could not read {file_path}: {e}", file=sys.stderr)
@@ -104,49 +110,49 @@ def main():
     """Main function to extract and output LICENSE files."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description='Extract LICENSE files from project directories and output to stdout.'
+        description="Extract LICENSE files from project directories and output to stdout."
     )
     parser.add_argument(
-        'project_path',
+        "project_path",
         type=str,
-        nargs='+',
-        help='Path(s) to the project root directory/directories to scan'
+        nargs="+",
+        help="Path(s) to the project root directory/directories to scan",
     )
     parser.add_argument(
-        '--deduplicate-rapids',
-        action='store_true',
+        "--deduplicate-rapids",
+        action="store_true",
         default=True,
-        help='Deduplicate RAPIDS Apache-2.0 licenses (default: enabled)'
+        help="Deduplicate RAPIDS Apache-2.0 licenses (default: enabled)",
     )
     parser.add_argument(
-        '--no-deduplicate-rapids',
-        action='store_false',
-        dest='deduplicate_rapids',
-        help='Disable RAPIDS license deduplication'
+        "--no-deduplicate-rapids",
+        action="store_false",
+        dest="deduplicate_rapids",
+        help="Disable RAPIDS license deduplication",
     )
     parser.add_argument(
-        '--handle-cccl',
-        action='store_true',
+        "--handle-cccl",
+        action="store_true",
         default=True,
-        help='Skip CCCL component licenses when root exists (default: enabled)'
+        help="Skip CCCL component licenses when root exists (default: enabled)",
     )
     parser.add_argument(
-        '--no-handle-cccl',
-        action='store_false',
-        dest='handle_cccl',
-        help='Disable CCCL special handling'
+        "--no-handle-cccl",
+        action="store_false",
+        dest="handle_cccl",
+        help="Disable CCCL special handling",
     )
     parser.add_argument(
-        '--normalize-years',
-        action='store_true',
+        "--normalize-years",
+        action="store_true",
         default=True,
-        help='Normalize copyright years for better deduplication (default: enabled)'
+        help="Normalize copyright years for better deduplication (default: enabled)",
     )
     parser.add_argument(
-        '--no-normalize-years',
-        action='store_false',
-        dest='normalize_years',
-        help='Disable year normalization'
+        "--no-normalize-years",
+        action="store_false",
+        dest="normalize_years",
+        help="Disable year normalization",
     )
     args = parser.parse_args()
 
@@ -173,27 +179,29 @@ def main():
     if not content_map:
         print("No LICENSE files found.", file=sys.stderr)
         return
-    
+
     # Apply advanced deduplication
     from .deduplication import group_licenses_with_deduplication
-    
+
     content_map = group_licenses_with_deduplication(
         content_map,
         use_year_normalization=args.normalize_years,
         deduplicate_rapids=args.deduplicate_rapids,
-        handle_cccl=args.handle_cccl
+        handle_cccl=args.handle_cccl,
     )
-    
-    print(f"Applied deduplication (RAPIDS: {args.deduplicate_rapids}, "
-          f"CCCL: {args.handle_cccl}, Years: {args.normalize_years})", file=sys.stderr)
+
+    print(
+        f"Applied deduplication (RAPIDS: {args.deduplicate_rapids}, "
+        f"CCCL: {args.handle_cccl}, Years: {args.normalize_years})",
+        file=sys.stderr,
+    )
 
     # Sort by the first filename found for each unique content for consistent output
-    sorted_items = sorted(content_map.items(), key=lambda x: sorted(x[1]['filenames'])[0])
+    sorted_items = sorted(content_map.items(), key=lambda x: sorted(x[1]["filenames"])[0])
 
-    for idx, (content_hash, file_info) in enumerate(sorted_items, 1):
-        filenames = file_info['filenames']
-        file_paths_dict = file_info['paths']
-        license_content = file_info['content']
+    for _idx, (_content_hash, file_info) in enumerate(sorted_items, 1):
+        file_paths_dict = file_info["paths"]
+        license_content = file_info["content"]
 
         print("=" * 80)
         # Display file locations using project heuristic
@@ -208,9 +216,9 @@ def main():
                 project_paths_map[project_name].add(rel_path)
             else:
                 # No project detected, use relative path
-                if 'unknown' not in project_paths_map:
-                    project_paths_map['unknown'] = set()
-                project_paths_map['unknown'].add(rel_path)
+                if "unknown" not in project_paths_map:
+                    project_paths_map["unknown"] = set()
+                project_paths_map["unknown"].add(rel_path)
 
         # Print grouped by project
         for project in sorted(project_paths_map.keys()):
@@ -236,4 +244,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

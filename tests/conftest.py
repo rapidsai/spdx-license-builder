@@ -8,8 +8,9 @@
 Pytest configuration and shared fixtures.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture
@@ -28,7 +29,8 @@ def test_project_dir(fixtures_dir):
 def sample_spdx_file(tmp_path):
     """Create a sample file with SPDX headers."""
     test_file = tmp_path / "sample.cpp"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 // SPDX-FileCopyrightText: Copyright (c) 2020 Example Corporation
 // SPDX-License-Identifier: MIT
 
@@ -38,7 +40,8 @@ int main() {
     std::cout << "Hello, World!" << std::endl;
     return 0;
 }
-""")
+"""
+    )
     return test_file
 
 
@@ -46,7 +49,8 @@ int main() {
 def sample_license_file(tmp_path):
     """Create a sample LICENSE file."""
     license_file = tmp_path / "LICENSE"
-    license_file.write_text("""MIT License
+    license_file.write_text(
+        """MIT License
 
 Copyright (c) 2020 Example Corporation
 
@@ -67,7 +71,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-""")
+"""
+    )
     return license_file
 
 
@@ -75,7 +80,8 @@ SOFTWARE.
 def multi_copyright_file(tmp_path):
     """Create a file with multiple copyright holders."""
     test_file = tmp_path / "multi.cpp"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 // SPDX-FileCopyrightText: Copyright (c) 2019 Company A
 // SPDX-FileCopyrightText: Copyright (c) 2020 Company B
 // SPDX-FileCopyrightText: Copyright (c) 2021 Company C
@@ -84,7 +90,8 @@ def multi_copyright_file(tmp_path):
 void example_function() {
     // Implementation
 }
-""")
+"""
+    )
     return test_file
 
 
@@ -92,7 +99,8 @@ void example_function() {
 def compound_license_file(tmp_path):
     """Create a file with compound license (AND/OR)."""
     test_file = tmp_path / "compound.cuh"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 // SPDX-FileCopyrightText: Copyright (c) Facebook, Inc. and its affiliates
 // SPDX-License-Identifier: Apache-2.0 AND MIT
 
@@ -102,7 +110,8 @@ def compound_license_file(tmp_path):
 // Dual licensed code
 
 #endif
-""")
+"""
+    )
     return test_file
 
 
@@ -110,14 +119,16 @@ def compound_license_file(tmp_path):
 def nvidia_file(tmp_path):
     """Create a file with NVIDIA copyright (should be ignored)."""
     test_file = tmp_path / "nvidia.cu"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 // SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 __global__ void kernel() {
     // NVIDIA code
 }
-""")
+"""
+    )
     return test_file
 
 
@@ -126,10 +137,10 @@ def common_licenses_dir(tmp_path):
     """Create a common_licenses directory with sample licenses."""
     licenses_dir = tmp_path / "common_licenses"
     licenses_dir.mkdir()
-    
+
     # Create some common license files
     (licenses_dir / "Apache-2.0.txt").write_text("Apache License 2.0 Full Text...")
     (licenses_dir / "MIT.txt").write_text("MIT License Full Text...")
     (licenses_dir / "BSD-3-Clause.txt").write_text("BSD 3-Clause License Full Text...")
-    
+
     return licenses_dir
