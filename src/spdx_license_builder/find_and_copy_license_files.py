@@ -73,8 +73,10 @@ def extract_license_files(project_paths):
 
         # Process each LICENSE file
         for file_path in matching_files:
-            # Get project name using the heuristic function
-            project_name, relative_path = get_project_relative_path(file_path)
+            # Get project name using the heuristic function, with project_path as fallback
+            project_name, relative_path = get_project_relative_path(
+                file_path, project_root=str(project_path)
+            )
 
             # Get just the filename
             filename = os.path.basename(file_path)
@@ -235,7 +237,14 @@ def main():
             # Group paths by project for cleaner output
             project_paths_map = {}
             for full_path, rel_path in file_paths_dict.items():
-                project_name, _ = get_project_relative_path(full_path)
+                # Try to determine which project_root this file belongs to
+                matching_root = None
+                for proj_path in project_paths:
+                    if full_path.startswith(str(proj_path)):
+                        matching_root = str(proj_path)
+                        break
+
+                project_name, _ = get_project_relative_path(full_path, project_root=matching_root)
                 if project_name:
                     if project_name not in project_paths_map:
                         project_paths_map[project_name] = set()

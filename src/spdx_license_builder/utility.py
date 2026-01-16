@@ -16,16 +16,18 @@ import urllib.request
 from pathlib import Path
 
 
-def get_project_relative_path(file_path):
+def get_project_relative_path(file_path, project_root=None):
     """
     Extract the project name and relative path from a file path using heuristics.
 
     Heuristics (in priority order):
     1. If a directory has a '-src' suffix, that's the project name (highest priority)
     2. If a directory is 'c' or 'cpp', the parent directory is the project name
+    3. If project_root is provided, use its basename as the project name
 
     Args:
         file_path: Full file path
+        project_root: Optional project root directory path
 
     Returns:
         Tuple of (project_name, relative_path) or (None, filename) if no project found
@@ -63,6 +65,19 @@ def get_project_relative_path(file_path):
     # If we found a c/cpp match but no -src, return the c/cpp match
     if c_cpp_match:
         return c_cpp_match
+
+    # If project_root is provided, use it as fallback
+    if project_root:
+        project_root_path = Path(project_root)
+        project_name = project_root_path.name
+        try:
+            # Get relative path from project root
+            file_path_obj = Path(file_path)
+            relative_path = str(file_path_obj.relative_to(project_root_path))
+            return (project_name, relative_path)
+        except ValueError:
+            # file_path is not relative to project_root
+            pass
 
     # No project found, return just the filename
     return (None, filename)
