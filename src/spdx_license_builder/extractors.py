@@ -38,7 +38,6 @@ _BASE_EXCLUDED_DIRS: frozenset[str] = frozenset(
     {
         ".git",
         ".github",
-        "build",
         "dist",
         "_build",
         "node_modules",
