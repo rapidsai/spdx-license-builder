@@ -21,7 +21,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .deduplication import group_licenses_with_deduplication
 from .license_records import (
     CopyrightInfo,
     DependencyLicense,
@@ -411,9 +410,6 @@ class DependencyLicenseExtractor(LicenseExtractor):
         project_paths: List[Path],
         directories_to_exclude: Optional[Tuple[str, ...]] = None,
         verbose: bool = True,
-        deduplicate_rapids: bool = False,
-        deduplicate_hierarchical: bool = False,
-        normalize_years: bool = False,
     ):
         """
         Initialize the dependency license extractor.
@@ -422,18 +418,8 @@ class DependencyLicenseExtractor(LicenseExtractor):
             project_paths: List of project paths to scan
             directories_to_exclude: Optional tuple of directory names to exclude
             verbose: Whether to print progress messages
-            deduplicate_rapids: Enable RAPIDS license deduplication (default: False)
-                               WARNING: May lose individual project attribution
-            deduplicate_hierarchical: Prefer parent licenses over child licenses (default: False)
-                                      WARNING: May lose subdirectory provenance information
-            normalize_years: Enable copyright year normalization (default: False)
-                            Normalizes year ranges (e.g., '2020-2023' vs '2022-2024')
-                            while preserving copyright holder differences
         """
         super().__init__(project_paths, directories_to_exclude, verbose)
-        self.deduplicate_rapids = deduplicate_rapids
-        self.deduplicate_hierarchical = deduplicate_hierarchical
-        self.normalize_years = normalize_years
         # Store results on instance
         self.content_map = {}
         self.total_files = 0
@@ -452,20 +438,6 @@ class DependencyLicenseExtractor(LicenseExtractor):
 
         self._log(f"  Found {self.total_files} total LICENSE files")
         self._log(f"  Found {len(self.content_map)} unique LICENSE contents")
-
-        # Apply deduplication if requested
-        if self.content_map:
-            self.content_map = group_licenses_with_deduplication(
-                self.content_map,
-                use_year_normalization=self.normalize_years,
-                deduplicate_rapids=self.deduplicate_rapids,
-                deduplicate_hierarchical=self.deduplicate_hierarchical,
-            )
-            self._log(
-                f"  After deduplication: {len(self.content_map)} unique licenses "
-                f"(RAPIDS: {self.deduplicate_rapids}, Hierarchical: {self.deduplicate_hierarchical}, "
-                f"Years: {self.normalize_years})"
-            )
 
         return self.content_map
 
@@ -543,9 +515,6 @@ class LicenseReportBuilder:
         self,
         project_paths: List[Path],
         with_licenses: bool = True,
-        deduplicate_rapids: bool = False,
-        deduplicate_hierarchical: bool = False,
-        normalize_years: bool = False,
         verbose: bool = True,
     ):
         """
@@ -554,20 +523,10 @@ class LicenseReportBuilder:
         Args:
             project_paths: List of project paths to scan
             with_licenses: Include full license texts for SPDX entries
-            deduplicate_rapids: Enable RAPIDS license deduplication (default: False)
-                               WARNING: May lose individual project attribution
-            deduplicate_hierarchical: Prefer parent licenses over child licenses (default: False)
-                                      WARNING: May lose subdirectory provenance information
-            normalize_years: Enable copyright year normalization (default: False)
-                            Normalizes year ranges (e.g., '2020-2023' vs '2022-2024')
-                            while preserving copyright holder differences
             verbose: Whether to print progress messages
         """
         self.project_paths = project_paths
         self.with_licenses = with_licenses
-        self.deduplicate_rapids = deduplicate_rapids
-        self.deduplicate_hierarchical = deduplicate_hierarchical
-        self.normalize_years = normalize_years
         self.verbose = verbose
 
     def build(self) -> LicenseReport:
@@ -593,9 +552,6 @@ class LicenseReportBuilder:
         dep_extractor = DependencyLicenseExtractor(
             self.project_paths,
             verbose=self.verbose,
-            deduplicate_rapids=self.deduplicate_rapids,
-            deduplicate_hierarchical=self.deduplicate_hierarchical,
-            normalize_years=self.normalize_years,
         )
         dep_content_map = dep_extractor.extract()
 
@@ -790,19 +746,26 @@ class LicenseReportBuilder:
             # Try to detect the license type from the content
             detected_license = detect_license_type(license_content)
 
-            if detected_license:
+            if detected_license and detected_license != "Multiple-Licenses":
                 # Use detected license ID - this will be grouped with SPDX entries of same type
                 license_id = detected_license
             else:
-                # For unrecognized licenses, create unique identifier using file paths
-                # This ensures each different unrecognized license is kept separate
+                # For aggregate/unrecognized licenses, create unique identifier using file paths
+                # This ensures each different aggregate/unrecognized license is kept separate
                 file_paths_list = sorted(file_paths_dict.values())
                 if file_paths_list:
                     # Use the first path as the unique identifier
-                    license_id = f"Unrecognized license: {file_paths_list[0]}"
+                    if detected_license == "Multiple-Licenses":
+                        # For aggregate licenses, use a more descriptive identifier
+                        license_id = f"Composite license from {file_paths_list[0]}"
+                    else:
+                        license_id = f"Unrecognized license: {file_paths_list[0]}"
                 else:
                     # Fallback to content hash
-                    license_id = f"Unrecognized license: {_content_hash[:8]}"
+                    if detected_license == "Multiple-Licenses":
+                        license_id = f"Composite license: {_content_hash[:8]}"
+                    else:
+                        license_id = f"Unrecognized license: {_content_hash[:8]}"
 
             # Add or merge into unified entry for this license
             if license_id not in unified_map:

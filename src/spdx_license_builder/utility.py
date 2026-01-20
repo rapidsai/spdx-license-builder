@@ -97,12 +97,14 @@ def detect_license_type(license_content: str) -> Optional[str]:
     Attempt to detect the license type from license file content.
 
     Uses pattern matching against known license text signatures.
+    Detects aggregate license files containing multiple distinct licenses.
 
     Args:
         license_content: The full text content of the license file
 
     Returns:
-        SPDX license identifier if detected, None otherwise
+        SPDX license identifier if detected, "Multiple-Licenses" for aggregate files,
+        None otherwise
     """
     # Normalize content for matching: lowercase, collapse whitespace
     normalized = re.sub(r"\s+", " ", license_content.lower().strip())
@@ -146,11 +148,31 @@ def detect_license_type(license_content: str) -> Optional[str]:
         (r"this is free and unencumbered software released into the public domain", "Unlicense"),
         # BSL-1.0 (Boost Software License)
         (r"boost software license.*version 1\.0", "BSL-1.0"),
+        # NCSA (University of Illinois/NCSA Open Source License)
+        (
+            r"university of illinois.*ncsa.*open source license",
+            "NCSA",
+        ),
     ]
 
+    # Check for aggregate license files
+    # Count how many distinct license types are present
+    matched_licenses = []
     for pattern, license_id in patterns:
         if re.search(pattern, normalized):
-            return license_id
+            # Avoid counting BSD-2 and BSD-3 as separate if both match
+            # (BSD-3 patterns often match BSD-2 text too)
+            if license_id == "BSD-2-Clause" and "BSD-3-Clause" in matched_licenses:
+                continue
+            matched_licenses.append(license_id)
+
+    # If we found multiple distinct licenses, it's an aggregate file
+    if len(matched_licenses) >= 2:
+        return "Multiple-Licenses"
+
+    # Single license detected
+    if len(matched_licenses) == 1:
+        return matched_licenses[0]
 
     return None
 

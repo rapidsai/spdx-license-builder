@@ -368,3 +368,74 @@ class TestGroupLicensesWithDeduplication:
 
         # Should have 2: one for RAPIDS (merged), one for CCCL root
         assert len(result) <= 2
+
+
+class TestDeduplicationEdgeCases:
+    """Test edge cases in deduplication logic."""
+
+    def test_all_paths_removed_by_deduplication(self):
+        """Test when all paths are removed during hierarchical dedup (line 330)."""
+        apache_license = "Apache License\nVersion 2.0..."
+
+        # Create scenario where child paths should all be removed in favor of parent
+        content_map = {
+            "parent": {
+                "content": apache_license,
+                "filenames": {"LICENSE"},
+                "paths": {"/path/to/project/LICENSE": "project/LICENSE"},
+            },
+            "child1": {
+                "content": apache_license,
+                "filenames": {"LICENSE"},
+                "paths": {"/path/to/project/subdir1/LICENSE": "project/subdir1/LICENSE"},
+            },
+            "child2": {
+                "content": apache_license,
+                "filenames": {"LICENSE"},
+                "paths": {"/path/to/project/subdir2/LICENSE": "project/subdir2/LICENSE"},
+            },
+        }
+
+        result = group_licenses_with_deduplication(
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=True,
+        )
+
+        # Result is a dictionary, should only have the parent, children should be removed
+        assert len(result) == 1
+        # Get the single entry value
+        entry = list(result.values())[0]
+        assert "project/LICENSE" in entry["paths"].values()
+
+    def test_empty_paths_dict_skipped(self):
+        """Test that entries with no paths after deduplication are skipped."""
+        license_text = "Some License Text"
+
+        # Create a scenario where one entry's paths would all be removed
+        content_map = {
+            "entry1": {
+                "content": license_text,
+                "filenames": {"LICENSE"},
+                "paths": {
+                    "/parent/LICENSE": "parent/LICENSE",
+                    "/parent/child/LICENSE": "parent/child/LICENSE",
+                },
+            },
+        }
+
+        result = group_licenses_with_deduplication(
+            content_map,
+            use_year_normalization=False,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=True,
+        )
+
+        # Should keep parent, remove child - result is a dict
+        assert len(result) == 1
+        entry = list(result.values())[0]
+        paths_list = list(entry["paths"].values())
+        assert len(paths_list) == 1
+        assert "parent/LICENSE" in paths_list
+        assert "parent/child/LICENSE" not in paths_list

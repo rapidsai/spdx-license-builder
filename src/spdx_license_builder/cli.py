@@ -39,9 +39,8 @@ Examples:
   # Extract LICENSE files only
   license-builder /path/to/project --no-extract
 
-  # Multiple projects with deduplication
-  license-builder /path/to/project1 /path/to/project2 \\
-    --deduplicate-rapids --output LICENSE
+  # Multiple projects
+  license-builder /path/to/project1 /path/to/project2 --output LICENSE
 """,
     )
 
@@ -79,23 +78,6 @@ Examples:
         "--no-license-text",
         action="store_true",
         help="Exclude full license text for SPDX entries (enabled by default)",
-    )
-
-    # Deduplication options
-    parser.add_argument(
-        "--deduplicate-rapids",
-        action="store_true",
-        help="[RISKY] Deduplicate RAPIDS project licenses (may lose individual project attribution)",
-    )
-    parser.add_argument(
-        "--deduplicate-hierarchical",
-        action="store_true",
-        help="[RISKY] Prefer parent licenses over child licenses when content is identical (may lose subdirectory provenance)",
-    )
-    parser.add_argument(
-        "--no-normalize-years",
-        action="store_true",
-        help="Disable copyright year normalization (by default, year ranges are normalized for deduplication)",
     )
 
     args = parser.parse_args()
@@ -140,9 +122,6 @@ def _run_license_builder(args) -> None:
     builder = LicenseReportBuilder(
         project_paths=project_paths,
         with_licenses=not args.no_license_text,  # Enabled by default
-        deduplicate_rapids=args.deduplicate_rapids,
-        deduplicate_hierarchical=args.deduplicate_hierarchical,
-        normalize_years=not args.no_normalize_years,  # Enabled by default
         verbose=True,
     )
 

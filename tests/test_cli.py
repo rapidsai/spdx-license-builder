@@ -123,39 +123,6 @@ class TestCLI:
 
         assert exc_info.value.code == 0
 
-    def test_deduplication_flags(self, monkeypatch, test_project_dir):
-        """Test deduplication flags."""
-        from spdx_license_builder.cli import main
-
-        monkeypatch.setattr(
-            sys,
-            "argv",
-            [
-                "license-builder",
-                str(test_project_dir),
-                "--deduplicate-rapids",
-                "--deduplicate-hierarchical",
-            ],
-        )
-
-        with pytest.raises(SystemExit) as exc_info:
-            main()
-
-        assert exc_info.value.code == 0
-
-    def test_no_normalize_years_flag(self, monkeypatch, test_project_dir):
-        """Test --no-normalize-years flag."""
-        from spdx_license_builder.cli import main
-
-        monkeypatch.setattr(
-            sys, "argv", ["license-builder", str(test_project_dir), "--no-normalize-years"]
-        )
-
-        with pytest.raises(SystemExit) as exc_info:
-            main()
-
-        assert exc_info.value.code == 0
-
 
 class TestModuleExecution:
     """Test running as a module."""
@@ -214,3 +181,48 @@ class TestCLIEdgeCases:
         assert exc_info.value.code == 0
         assert output_file.exists()
         assert output_file.stat().st_size > 0
+
+    def test_cli_exception_handling(self, monkeypatch, capsys):
+        """Test that CLI handles exceptions properly (tests lines 112-113)."""
+        from unittest.mock import patch
+
+        from spdx_license_builder.cli import main
+
+        monkeypatch.setattr(sys, "argv", ["license-builder", "/nonexistent/path"])
+
+        # Mock _run_license_builder to raise an exception
+        with patch(
+            "spdx_license_builder.cli._run_license_builder",
+            side_effect=RuntimeError("Test error"),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+            # Should exit with code 1 on error
+            assert exc_info.value.code == 1
+
+            # Should print error message to stderr
+            captured = capsys.readouterr()
+            assert "Error: Test error" in captured.err
+
+    def test_cli_generic_exception(self, monkeypatch, capsys):
+        """Test that CLI handles generic exceptions properly."""
+        from unittest.mock import patch
+
+        from spdx_license_builder.cli import main
+
+        monkeypatch.setattr(sys, "argv", ["license-builder", "/some/path"])
+
+        with patch(
+            "spdx_license_builder.cli._run_license_builder",
+            side_effect=ValueError("Invalid configuration"),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+            # Should exit with code 1
+            assert exc_info.value.code == 1
+
+            # Should print error message to stderr
+            captured = capsys.readouterr()
+            assert "Error: Invalid configuration" in captured.err

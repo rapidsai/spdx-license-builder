@@ -17,61 +17,6 @@ from spdx_license_builder.utility import (
 )
 
 
-class TestGetProjectRelativePath:
-    """Test the get_project_relative_path function."""
-
-    def test_c_directory_heuristic(self):
-        """Test that files in 'c' directories are detected correctly."""
-        file_path = "/home/user/raft/c/include/raft/core.hpp"
-        project_name, rel_path = get_project_relative_path(file_path)
-
-        assert project_name == "raft"
-        assert "c/include/raft/core.hpp" in rel_path
-
-    def test_cpp_directory_heuristic(self):
-        """Test that files in 'cpp' directories are detected correctly."""
-        file_path = "/home/user/cudf/cpp/src/io/csv/reader.cpp"
-        project_name, rel_path = get_project_relative_path(file_path)
-
-        assert project_name == "cudf"
-        assert "cpp/src/io/csv/reader.cpp" in rel_path
-
-    def test_src_suffix_heuristic(self):
-        """Test that directories with '-src' suffix are detected (higher priority)."""
-        file_path = "/home/user/build/fmt-src/include/fmt/core.h"
-        project_name, rel_path = get_project_relative_path(file_path)
-
-        assert project_name == "fmt"
-        assert "include/fmt/core.h" in rel_path
-
-    def test_src_suffix_priority_over_cpp(self):
-        """Test that -src suffix has priority over c/cpp directories."""
-        file_path = "/home/user/build/cuco-src/cpp/include/cuco/hash.hpp"
-        project_name, rel_path = get_project_relative_path(file_path)
-
-        # Should match -src first, not cpp parent
-        assert project_name == "cuco"
-        # Path should start after cuco-src
-        assert "cpp/include/cuco/hash.hpp" in rel_path
-
-    def test_no_project_detected(self):
-        """Test files that don't match any heuristic."""
-        file_path = "/home/user/random/file.cpp"
-        project_name, rel_path = get_project_relative_path(file_path)
-
-        assert project_name is None
-        assert rel_path == "file.cpp"
-
-    def test_nested_cpp_directories(self):
-        """Test that only the first cpp/c parent is used."""
-        file_path = "/home/user/raft/cpp/src/nested/file.cpp"
-        project_name, rel_path = get_project_relative_path(file_path)
-
-        assert project_name == "raft"
-        # Should capture from the first cpp onwards
-        assert "cpp" in rel_path
-
-
 class TestGetLicenseText:
     """Test the get_license_text function."""
 
@@ -394,6 +339,239 @@ class TestLicenseDetection:
         assert result == "Apache-2.0"
 
 
+class TestGetProjectRelativePath:
+    """Test get_project_relative_path function."""
+
+    def test_simple_path_with_project_root(self, tmp_path):
+        """Test simple file path with explicit project root."""
+        project_root = tmp_path / "myproject"
+        project_root.mkdir()
+        file_path = project_root / "src" / "main.cpp"
+        file_path.parent.mkdir()
+        file_path.touch()
+
+        project_name, rel_path = get_project_relative_path(str(file_path), str(project_root))
+        assert project_name == "myproject"
+        assert rel_path == "src/main.cpp"
+
+    def test_path_with_c_directory(self, tmp_path):
+        """Test path containing /c/ directory."""
+        project_root = tmp_path / "build"
+        project_root.mkdir()
+        c_dir = project_root / "mylib-src" / "c" / "src"
+        c_dir.mkdir(parents=True)
+        file_path = c_dir / "main.c"
+        file_path.touch()
+
+        project_name, rel_path = get_project_relative_path(str(file_path))
+        assert project_name == "mylib"
+        assert "c/src/main.c" in rel_path
+
+    def test_path_with_cpp_directory(self, tmp_path):
+        """Test path containing /cpp/ directory."""
+        project_root = tmp_path / "build"
+        project_root.mkdir()
+        cpp_dir = project_root / "mylib-src" / "cpp" / "include"
+        cpp_dir.mkdir(parents=True)
+        file_path = cpp_dir / "header.h"
+        file_path.touch()
+
+        project_name, rel_path = get_project_relative_path(str(file_path))
+        assert project_name == "mylib"
+        assert "cpp/include/header.h" in rel_path
+
+    def test_path_without_project_markers(self, tmp_path):
+        """Test path without c/cpp or -src markers (line 246 fallback)."""
+        # Create a path with no project markers - just a regular nested path
+        file_path = tmp_path / "some" / "random" / "path" / "file.txt"
+        file_path.parent.mkdir(parents=True)
+        file_path.touch()
+
+        project_name, rel_path = get_project_relative_path(str(file_path))
+        # When no project markers are found, returns (None, filename)
+        assert project_name is None
+        assert rel_path == "file.txt"
+
+    def test_path_outside_project_root(self, tmp_path):
+        """Test file path outside of project_root (hits line 241-243 ValueError catch)."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        # File is outside the project root
+        outside_file = tmp_path / "outside" / "file.txt"
+        outside_file.parent.mkdir()
+        outside_file.touch()
+
+        project_name, rel_path = get_project_relative_path(str(outside_file), str(project_root))
+        # Should fall back to (None, filename) when path is outside project_root
+        assert project_name is None
+        assert rel_path == "file.txt"
+
+    def test_path_is_just_filename(self, tmp_path):
+        """Test when remaining parts result in just a filename (hits line 229)."""
+        # Create a structure where after removing parts, only filename remains
+        project_root = tmp_path / "build"
+        project_root.mkdir()
+        src_dir = project_root / "mylib-src"
+        src_dir.mkdir()
+        file_path = src_dir / "LICENSE"
+        file_path.touch()
+
+        project_name, rel_path = get_project_relative_path(str(file_path))
+        assert project_name == "mylib"
+        # Should return just the filename when no path parts remain
+        assert rel_path == "LICENSE"
+
+
+class TestAggregateLicenseDetection:
+    """Test detection of aggregate license files containing multiple licenses."""
+
+    def test_single_license_apache(self):
+        """Test that single license files are still detected correctly."""
+        license_text = """
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        TERMS AND CONDITIONS...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Apache-2.0"
+
+    def test_single_license_mit(self):
+        """Test that single MIT license is detected correctly."""
+        license_text = """
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+        """
+        result = detect_license_type(license_text)
+        assert result == "MIT"
+
+    def test_aggregate_apache_and_mit(self):
+        """Test detection of aggregate file with Apache and MIT."""
+        license_text = """
+        ==============================================================================
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+        1. Definitions...
+
+        ==============================================================================
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Multiple-Licenses"
+
+    def test_aggregate_apache_mit_bsd(self):
+        """Test detection of aggregate file with 3+ licenses (like CCCL)."""
+        license_text = """
+        ==============================================================================
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        TERMS AND CONDITIONS...
+
+        ==============================================================================
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+
+        ==============================================================================
+        BSD-3-Clause
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name of the
+        copyright holder may be used to endorse or promote products...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Multiple-Licenses"
+
+    def test_aggregate_with_boost(self):
+        """Test aggregate detection with Boost Software License."""
+        license_text = """
+        Apache License
+        Version 2.0, January 2004
+
+        TERMS AND CONDITIONS...
+
+        ================================================================================
+        Boost Software License - Version 1.0 - August 17th, 2003
+
+        Permission is hereby granted, free of charge...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Multiple-Licenses"
+
+    def test_aggregate_apache_with_llvm_exceptions(self):
+        """Test CCCL-style file with Apache + LLVM exceptions + other licenses."""
+        license_text = """
+        ==============================================================================
+        Thrust is under the Apache Licence v2.0, with some specific exceptions
+        libcu++ is under the Apache License v2.0 with LLVM Exceptions:
+        ==============================================================================
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+        ---- LLVM Exceptions to the Apache 2.0 License ----
+
+        ==============================================================================
+        University of Illinois/NCSA
+        Open Source License
+
+        Permission is hereby granted, free of charge...
+
+        ==============================================================================
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+
+        ==============================================================================
+        Boost Software License - Version 1.0
+
+        Permission is hereby granted...
+
+        ==============================================================================
+        BSD-3-Clause
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name may be used
+        to endorse or promote products...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Multiple-Licenses"
+
+    def test_bsd_variants_not_double_counted(self):
+        """Test that BSD-2 and BSD-3 together count as aggregate."""
+        license_text = """
+        BSD-3-Clause License
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that:
+        - Redistributions in binary form must reproduce the above copyright
+        - Neither the name of the copyright holder may be used to endorse or promote
+
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Multiple-Licenses"
+
+
 class TestCopyrightExtractionFromLicense:
     """Test extracting copyright statements from LICENSE file content."""
 
@@ -507,4 +685,45 @@ No copyright claimed."""
 
         copyrights = extract_copyright_from_license_text(license_text)
         # Should not find it since it's beyond line 20
+        assert len(copyrights) == 0
+
+    def test_copyright_invalid_year_format_rejected(self):
+        """Test that invalid year formats are rejected (tests validate_years on line 83)."""
+        # This tests the validate_years check that rejects non-digit year strings
+        license_text = """
+Copyright January 2024, Some Company
+
+Permission is hereby granted..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        # Should reject "January" as it's not a valid year format
+        assert len(copyrights) == 0
+
+    def test_copyright_mixed_valid_invalid(self):
+        """Test file with both valid and invalid copyright formats."""
+        license_text = """
+Copyright (c) 2020-2023, Valid Company
+
+Copyright Invalid Format Here, Bad Company
+
+Copyright 2024, Another Valid Company
+
+Permission is hereby granted..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        # Should find only the valid ones
+        assert len(copyrights) == 2
+        assert ("2020-2023", "Valid Company") in copyrights
+        assert ("2024", "Another Valid Company") in copyrights
+
+    def test_copyright_year_with_text_rejected(self):
+        """Test that years mixed with non-digit text are rejected."""
+        license_text = """
+Copyright Year2024, Some Company
+Copyright 2024Year, Another Company
+
+Permission is hereby granted..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        # These should be rejected as invalid year formats
         assert len(copyrights) == 0

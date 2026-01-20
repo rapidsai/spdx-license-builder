@@ -246,30 +246,6 @@ class TestExtractorOptions:
         # Might not find any if they're all in third_party
         assert isinstance(content_map, dict)
 
-    def test_deduplication_options(self, test_project_dir):
-        """Test deduplication options."""
-        builder1 = LicenseReportBuilder(
-            project_paths=[test_project_dir],
-            deduplicate_rapids=False,
-            deduplicate_hierarchical=False,
-            normalize_years=False,
-            verbose=False,
-        )
-        report1 = builder1.build()
-
-        builder2 = LicenseReportBuilder(
-            project_paths=[test_project_dir],
-            deduplicate_rapids=True,
-            deduplicate_hierarchical=True,
-            normalize_years=True,
-            verbose=False,
-        )
-        report2 = builder2.build()
-
-        # Both should produce valid reports
-        assert report1 is not None
-        assert report2 is not None
-
 
 class TestExtractorEdgeCases:
     """Test edge cases and error handling."""

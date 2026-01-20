@@ -20,8 +20,8 @@ The `license-builder` tool extracts license information using two complementary 
 
 ### 1. **SPDX Copyright Extraction**
 
-Scans source files for SPDX headers to find third-party code:
-- Parses `SPDX-FileCopyrightText` and `SPDX-License-Identifier` tags
+Scans source files for SPDX headers to find `SPDX-FileCopyrightText` and
+`SPDX-License-Identifier` tags in third-party code.
 
 ### 2. **LICENSE File Copying**
 
@@ -29,51 +29,49 @@ Finds standalone LICENSE files in dependencies:
 - Searches for common license file patterns (LICENSE, COPYING, COPYRIGHT, NOTICE)
 - Includes build directories where dependencies are typically located
 - Reads full license text from each file
+- **Automatically detects** license type from content and groups with SPDX entries
 
-**Note:** By default, copyright year ranges are normalized for better deduplication (e.g., "2020-2023" and "2022-2024" from the same holder are treated as equivalent). Use `--no-normalize-years` to disable this.
+#### Supported License Detection
+
+The tool automatically recognizes these common licenses from LICENSE file content:
+- **Apache-2.0** - Apache License 2.0
+- **MIT** - MIT License
+- **BSD-2-Clause**, **BSD-3-Clause** - BSD Licenses
+- **GPL-2.0-only**, **GPL-3.0-only** - GNU General Public License
+- **LGPL-2.1-only**, **LGPL-3.0-only** - GNU Lesser General Public License
+- **MPL-2.0** - Mozilla Public License
+- **ISC** - ISC License
+- **NCSA** - University of Illinois/NCSA License
+- **BSL-1.0** - Boost Software License
+- **Unlicense** - Public domain dedication
+- **Composite license from `<path>`** - Aggregate files containing 2+ distinct licenses (each gets a unique identifier based on its file path)
+
+When a LICENSE file is recognized, it's automatically grouped with SPDX entries of the same license type for unified reporting.
 
 ---
 
 ## Usage
 
-### Basic Commands
-
 ```bash
-# Run both modes (recommended - complete license information)
+# Basic usage
 license-builder /path/to/project --output LICENSE
 
 # Multiple projects
 license-builder /path/to/project1 /path/to/project2 --output LICENSE
 ```
 
-### Advanced Options
-
-```bash
-# Deduplicate RAPIDS project licenses
-license-builder /path/to/project --deduplicate-rapids
-
-# Prefer parent directory licenses over child licenses
-license-builder /path/to/project --deduplicate-hierarchical
-
-# Disable year normalization (enabled by default)
-license-builder /path/to/project --no-normalize-years
-
-# Combine all features
-license-builder /path/to/project \\
-  --deduplicate-rapids \\
-  --deduplicate-hierarchical \\
-  --output LICENSE
-```
 
 ---
 
 ## Output Format
 
-The tool produces a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers (extract mode) and LICENSE files (copy mode):
+The tool produces a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers and LICENSE files. Beneath the license identifier header, files are grouped by their copyright statements, showing all file locations that share the same copyright holder and year range.
+
+
 
 ### Example 1: License from SPDX Headers Only
 
-When code includes SPDX tags, copyright info is extracted:
+When code includes SPDX tags, copyright info is extracted and grouped by copyright holder:
 
 ```
 ================================================================================
@@ -86,6 +84,13 @@ Files with SPDX headers:
     cudf: cpp/include/cudf/detail/utilities/Select.cuh
     cuml: cpp/src/neighbors/Select.cuh
     raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
+
+  Copyright (c) 2017-2022, Facebook, Inc. and its affiliates
+    cudf: cpp/include/cudf/detail/utilities/WarpSelect.cuh
+    raft: cpp/include/raft/neighbors/detail/faiss_select/WarpSelect.cuh
+
+  Copyright (c) 2020-2024, Meta Platforms, Inc.
+    cuml: cpp/src/distance/kernels/BlockSelect.cuh
 
 Full License Text:
 
@@ -110,7 +115,8 @@ Full License Text:
 
 ### Example 2: License from SPDX Headers + LICENSE Files
 
-When the same license identifier appears in both sources, they are unified:
+When the same license identifier appears in both sources, they are unified and
+grouped by copyright (which may include more than one copyright line):
 
 ```
 ================================================================================
@@ -121,6 +127,10 @@ Files with SPDX headers:
 
   Copyright (c) 2020-2023, Example Corporation
     myproject: cpp/include/bsd_file.h
+    myproject: cpp/include/utilities/bsd_helper.h
+
+  Copyright (c) 2021, Other Developer
+    myproject: cpp/src/bsd_module.cpp
 
 LICENSE files:
 
@@ -153,6 +163,10 @@ Files with SPDX headers:
 
   Copyright (c) 2023, My Company
     myproject: cpp/src/utils.cpp
+    myproject: cpp/src/helpers.cpp
+
+  Copyright (c) 2022-2024, Third Party Contributor
+    myproject: cpp/include/contrib/module.h
 
 LICENSE files:
 
@@ -198,6 +212,50 @@ Full License Text:
   (full custom license text)
 ```
 
+### Example 5: Aggregate License Files
+
+Aggregate LICENSE files containing multiple distinct licenses (like [NVIDIA CCCL](https://github.com/NVIDIA/cccl/blob/main/LICENSE)) are automatically detected and given unique identifiers based on their location:
+
+```
+================================================================================
+License: Composite license from myproject/cpp/third_party/cccl/LICENSE
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2010-2023, NVIDIA CORPORATION
+  Copyright (c) 2009-2019, by the contributors listed in CREDITS.TXT
+  Copyright (c) 2009-2014, MIT contributors
+    myproject: cpp/third_party/cccl/LICENSE
+
+Full License Text:
+
+  ==============================================================================
+  Thrust is under the Apache Licence v2.0, with some specific exceptions
+  libcu++ is under the Apache License v2.0 with LLVM Exceptions:
+  ==============================================================================
+                                Apache License
+                           Version 2.0, January 2004
+  ...
+
+  ==============================================================================
+  Legacy LLVM License:
+  ==============================================================================
+  University of Illinois/NCSA
+  Open Source License
+  ...
+
+  ==============================================================================
+  MIT License
+  ==============================================================================
+  Permission is hereby granted, free of charge...
+  ...
+
+  (full aggregate license text showing all component licenses)
+```
+
+**Note:** Each aggregate license file gets a unique identifier based on its path, ensuring that different composite licenses from different dependencies remain distinct in the report.
+
 ---
 
 ## Installation
@@ -223,7 +281,6 @@ from spdx_license_builder import LicenseReportBuilder
 builder = LicenseReportBuilder(
     project_paths=[Path("/path/to/project")],
     with_licenses=True,
-    deduplicate_rapids=True,
     verbose=True,
 )
 

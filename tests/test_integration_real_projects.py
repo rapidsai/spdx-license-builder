@@ -33,9 +33,6 @@ def extract_license_files(project_paths, directories_to_exclude=None, verbose=Fa
         project_paths,
         directories_to_exclude=directories_to_exclude,
         verbose=verbose,
-        deduplicate_rapids=False,
-        deduplicate_hierarchical=False,
-        normalize_years=False,
     )
     return extractor.extract()
 
