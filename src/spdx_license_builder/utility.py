@@ -14,7 +14,145 @@ import re
 import sys
 import urllib.request
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
+
+
+def extract_copyright_from_license_text(license_content: str) -> List[Tuple[str, str]]:
+    """
+    Extract copyright statements from LICENSE file content.
+
+    Returns a list of (year_range, owner) tuples found in the license text.
+    Typically looks for copyright statements near the top of the file.
+
+    Args:
+        license_content: The full text content of the license file
+
+    Returns:
+        List of tuples (year_range, owner) for each copyright found
+    """
+    copyrights = []
+
+    # Process first 20 lines (where copyright statements typically appear)
+    lines = license_content.split("\n")[:20]
+
+    # Copyright patterns (similar to SPDX extraction but adapted for LICENSE files)
+    # Patterns handle years, year ranges, and "year - present" format
+    patterns = [
+        # Pattern 1: Copyright (c) <year-range>, <owner> (with comma separator)
+        (
+            r"Copyright\s*\([cC]\)\s*([\d\-]+(?:\s+-\s+\w+)?),\s+(.+?)(?:\.\s*All rights reserved\.?)?$",
+            True,
+            False,
+        ),
+        # Pattern 2: Copyright (c) <year-range> <owner> (no comma, allows "year - present")
+        (
+            r"Copyright\s*\([cC]\)\s*([\d\-]+(?:\s+-\s+\w+)?)\s+(.+?)(?:\.\s*All rights reserved\.?)?$",
+            True,
+            False,
+        ),
+        # Pattern 3: Copyright (<year>), <owner> (no 'c', with comma after parens)
+        (r"Copyright\s*\(([\d\-]+)\),\s+(.+?)(?:\.\s*All rights reserved\.?)?$", True, False),
+        # Pattern 4: Copyright (<year>) <owner> (no 'c', no comma)
+        (r"Copyright\s*\(([\d\-]+)\)\s+(.+?)(?:\.\s*All rights reserved\.?)?$", True, False),
+        # Pattern 5: Copyright (c) <owner> (no year)
+        (r"Copyright\s*\([cC]\)\s+(.+?)(?:\.\s*All rights reserved\.?)?$", False, False),
+        # Pattern 6: Copyright <year>, <owner> (no parentheses, with comma)
+        (
+            r"Copyright\s+([\d\-]+(?:\s+-\s+\w+)?),\s+(.+?)(?:\.\s*All rights reserved\.?)?$",
+            True,
+            True,
+        ),
+        # Pattern 7: Copyright <year> <owner> (no parentheses, no comma)
+        (r"Copyright\s+([\d\-]+)\s+(.+?)(?:\.\s*All rights reserved\.?)?$", True, True),
+    ]
+
+    for line in lines:
+        line = line.strip()
+        if not line or not line.lower().startswith("copyright"):
+            continue
+
+        # Try patterns in order
+        for pattern, has_years, validate_years in patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                if has_years:
+                    years = match.group(1).strip()
+                    owner = match.group(2).strip()
+                    # Extra validation for patterns without parentheses
+                    if validate_years and not re.match(r"^[\d\-]+$", years):
+                        continue
+                    copyrights.append((years, owner))
+                    break
+                else:
+                    # No years in this pattern
+                    owner = match.group(1).strip()
+                    copyrights.append(("", owner))
+                    break
+
+    return copyrights
+
+
+def detect_license_type(license_content: str) -> Optional[str]:
+    """
+    Attempt to detect the license type from license file content.
+
+    Uses pattern matching against known license text signatures.
+
+    Args:
+        license_content: The full text content of the license file
+
+    Returns:
+        SPDX license identifier if detected, None otherwise
+    """
+    # Normalize content for matching: lowercase, collapse whitespace
+    normalized = re.sub(r"\s+", " ", license_content.lower().strip())
+
+    # License detection patterns (in order of specificity)
+    # Each pattern includes unique identifying text from that license
+    patterns = [
+        # Apache-2.0
+        (r"apache license.*version 2\.0.*january 2004", "Apache-2.0"),
+        # MIT
+        (
+            r"permission is hereby granted.*free of charge.*to deal in the software without restriction",
+            "MIT",
+        ),
+        # BSD-3-Clause
+        (
+            r"redistribution and use in source and binary forms.*neither the name.*may be used to endorse or promote",
+            "BSD-3-Clause",
+        ),
+        # BSD-2-Clause
+        (
+            r"redistribution and use in source and binary forms.*redistributions in binary form must reproduce",
+            "BSD-2-Clause",
+        ),
+        # GPL-3.0
+        (r"gnu general public license.*version 3.*29 june 2007", "GPL-3.0-only"),
+        # GPL-2.0
+        (r"gnu general public license.*version 2.*june 1991", "GPL-2.0-only"),
+        # LGPL-3.0
+        (r"gnu lesser general public license.*version 3.*29 june 2007", "LGPL-3.0-only"),
+        # LGPL-2.1
+        (r"gnu lesser general public license.*version 2\.1.*february 1999", "LGPL-2.1-only"),
+        # MPL-2.0
+        (r"mozilla public license version 2\.0", "MPL-2.0"),
+        # ISC
+        (
+            r"permission to use, copy, modify.*and\/or distribute.*provided that.*above copyright notice",
+            "ISC",
+        ),
+        # Unlicense
+        (r"this is free and unencumbered software released into the public domain", "Unlicense"),
+        # BSL-1.0 (Boost Software License)
+        (r"boost software license.*version 1\.0", "BSL-1.0"),
+    ]
+
+    for pattern, license_id in patterns:
+        if re.search(pattern, normalized):
+            return license_id
+
+    return None
 
 
 def get_project_relative_path(
@@ -176,21 +314,28 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
 
 
 def walk_directories_for_files(
-    dir_path: str, directories_to_exclude: Tuple[str, ...], file_pattern: str
+    dir_path: str,
+    directories_to_exclude: Tuple[str, ...],
+    file_pattern: Union[str, List[str]],
 ) -> List[str]:
     """
-    Walk through specified directories and collect all files matching a pattern.
+    Walk through specified directories and collect all files matching pattern(s).
 
     Args:
         dir_path: Base path to start searching from
         directories_to_exclude: Tuple of directory names to exclude (e.g., ("python", "rust"))
-        file_pattern: Pattern to match files (e.g., "LICENSE")
+        file_pattern: Pattern(s) to match files. Can be:
+                     - A single string (e.g., "LICENSE") - matches files starting with pattern
+                     - A list of strings (e.g., ["LICENSE", "COPYING"]) - matches any pattern
 
     Returns:
-        List of file paths that match the pattern
+        List of file paths that match the pattern(s)
     """
     matching_files = []
     excluded = set(directories_to_exclude)
+
+    # Normalize to list
+    patterns = [file_pattern] if isinstance(file_pattern, str) else file_pattern
 
     for root, dirs, files in os.walk(dir_path, topdown=True):
         # Filter directories in-place to prune tree traversal
@@ -198,7 +343,8 @@ def walk_directories_for_files(
 
         # Filter matching files
         for file in files:
-            if file.startswith(file_pattern):
+            # Check if file matches any pattern (startswith)
+            if any(file.startswith(pattern) for pattern in patterns):
                 matching_files.append(os.path.join(root, file))
 
     return matching_files

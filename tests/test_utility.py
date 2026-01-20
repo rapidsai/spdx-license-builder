@@ -9,7 +9,12 @@ Tests for utility functions.
 """
 
 from spdx_license_builder.extractors import SpdxExtractor
-from spdx_license_builder.utility import get_license_text, get_project_relative_path
+from spdx_license_builder.utility import (
+    detect_license_type,
+    extract_copyright_from_license_text,
+    get_license_text,
+    get_project_relative_path,
+)
 
 
 class TestGetProjectRelativePath:
@@ -232,3 +237,274 @@ class TestLicenseComponentParsing:
         assert "Apache-2.0" in result
         assert "MIT" in result
         assert "BSD-3-Clause" in result
+
+
+class TestLicenseDetection:
+    """Test automatic license type detection from content."""
+
+    def test_detect_apache_2_0(self):
+        """Test detection of Apache-2.0 license."""
+        license_text = """
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+        """
+        result = detect_license_type(license_text)
+        assert result == "Apache-2.0"
+
+    def test_detect_mit(self):
+        """Test detection of MIT license."""
+        license_text = """
+        MIT License
+
+        Copyright (c) 2020 Example
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software and associated documentation files (the
+        "Software"), to deal in the Software without restriction, including
+        without limitation the rights to use, copy, modify, merge, publish,
+        distribute, sublicense, and/or sell copies of the Software.
+        """
+        result = detect_license_type(license_text)
+        assert result == "MIT"
+
+    def test_detect_bsd_3_clause(self):
+        """Test detection of BSD-3-Clause license."""
+        license_text = """
+        Copyright (c) Example Corporation.
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain the above copyright notice...
+        2. Redistributions in binary form must reproduce...
+        3. Neither the name of the copyright holder nor the names of its
+           contributors may be used to endorse or promote products derived from
+           this software without specific prior written permission.
+        """
+        result = detect_license_type(license_text)
+        assert result == "BSD-3-Clause"
+
+    def test_detect_bsd_2_clause(self):
+        """Test detection of BSD-2-Clause license."""
+        license_text = """
+        Copyright (c) Example Corporation.
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain...
+        2. Redistributions in binary form must reproduce the above copyright
+           notice, this list of conditions...
+        """
+        result = detect_license_type(license_text)
+        assert result == "BSD-2-Clause"
+
+    def test_detect_gpl_3_0(self):
+        """Test detection of GPL-3.0 license."""
+        license_text = """
+        GNU GENERAL PUBLIC LICENSE
+        Version 3, 29 June 2007
+
+        Copyright (C) 2007 Free Software Foundation, Inc.
+        """
+        result = detect_license_type(license_text)
+        assert result == "GPL-3.0-only"
+
+    def test_detect_lgpl_2_1(self):
+        """Test detection of LGPL-2.1 license."""
+        license_text = """
+        GNU LESSER GENERAL PUBLIC LICENSE
+        Version 2.1, February 1999
+
+        Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+        """
+        result = detect_license_type(license_text)
+        assert result == "LGPL-2.1-only"
+
+    def test_detect_mpl_2_0(self):
+        """Test detection of MPL-2.0 license."""
+        license_text = """
+        Mozilla Public License Version 2.0
+        ==================================
+
+        1. Definitions
+        """
+        result = detect_license_type(license_text)
+        assert result == "MPL-2.0"
+
+    def test_detect_isc(self):
+        """Test detection of ISC license."""
+        license_text = """
+        Copyright (c) Example
+
+        Permission to use, copy, modify, and/or distribute this software for any
+        purpose with or without fee is hereby granted, provided that the above
+        copyright notice and this permission notice appear in all copies.
+        """
+        result = detect_license_type(license_text)
+        assert result == "ISC"
+
+    def test_detect_unlicense(self):
+        """Test detection of Unlicense."""
+        license_text = """
+        This is free and unencumbered software released into the public domain.
+
+        Anyone is free to copy, modify, publish...
+        """
+        result = detect_license_type(license_text)
+        assert result == "Unlicense"
+
+    def test_detect_boost(self):
+        """Test detection of Boost Software License."""
+        license_text = """
+        Boost Software License - Version 1.0 - August 17th, 2003
+
+        Permission is hereby granted...
+        """
+        result = detect_license_type(license_text)
+        assert result == "BSL-1.0"
+
+    def test_unrecognized_license(self):
+        """Test that unrecognized licenses return None."""
+        license_text = """
+        This is a custom proprietary license that doesn't match
+        any known patterns. All rights reserved by Custom Corp.
+        """
+        result = detect_license_type(license_text)
+        assert result is None
+
+    def test_empty_content(self):
+        """Test handling of empty license content."""
+        result = detect_license_type("")
+        assert result is None
+
+    def test_whitespace_normalization(self):
+        """Test that detection works with various whitespace."""
+        license_text = """
+        Apache    License
+
+
+        Version   2.0,    January    2004
+        http://www.apache.org/licenses/
+        """
+        result = detect_license_type(license_text)
+        assert result == "Apache-2.0"
+
+
+class TestCopyrightExtractionFromLicense:
+    """Test extracting copyright statements from LICENSE file content."""
+
+    def test_extract_mit_copyright(self):
+        """Test extracting copyright from MIT license."""
+        license_text = """MIT License
+
+Copyright (c) 2012 - present, Victor Zverovich
+
+Permission is hereby granted, free of charge..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 1
+        year_range, owner = copyrights[0]
+        assert year_range == "2012 - present"
+        assert owner == "Victor Zverovich"
+
+    def test_extract_apache_copyright(self):
+        """Test extracting copyright from Apache license."""
+        license_text = """Apache License
+Version 2.0, January 2004
+http://www.apache.org/licenses/
+
+Copyright (c) 2020-2023, NVIDIA CORPORATION.
+
+Licensed under the Apache License..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 1
+        year_range, owner = copyrights[0]
+        assert year_range == "2020-2023"
+        assert "NVIDIA CORPORATION" in owner
+
+    def test_extract_multiple_copyrights(self):
+        """Test extracting multiple copyright statements."""
+        license_text = """License Agreement
+
+Copyright (c) 2015, First Company
+Copyright (c) 2018-2020, Second Company
+
+All rights reserved..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 2
+        year1, owner1 = copyrights[0]
+        assert year1 == "2015"
+        assert "First Company" in owner1
+        year2, owner2 = copyrights[1]
+        assert year2 == "2018-2020"
+        assert "Second Company" in owner2
+
+    def test_extract_copyright_no_year(self):
+        """Test extracting copyright without year."""
+        license_text = """Custom License
+
+Copyright (c) Example Corporation
+
+Terms and conditions..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 1
+        year_range, owner = copyrights[0]
+        assert year_range == ""
+        assert owner == "Example Corporation"
+
+    def test_extract_copyright_no_parens(self):
+        """Test extracting copyright without parentheses."""
+        license_text = """License
+
+Copyright 2019-2023 Test Company Inc.
+
+Permission is hereby granted..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 1
+        year_range, owner = copyrights[0]
+        assert year_range == "2019-2023"
+        assert owner == "Test Company Inc."
+
+    def test_extract_copyright_all_rights_reserved(self):
+        """Test that 'All rights reserved' is properly handled."""
+        license_text = """License
+
+Copyright (c) 2024, Custom Corp. All rights reserved.
+
+Terms..."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 1
+        year_range, owner = copyrights[0]
+        assert year_range == "2024"
+        # "All rights reserved" should be stripped
+        assert "All rights reserved" not in owner
+        assert "Custom Corp" in owner
+
+    def test_no_copyright_found(self):
+        """Test handling license with no copyright statement."""
+        license_text = """Public Domain
+
+This software has been released to the public domain.
+No copyright claimed."""
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        assert len(copyrights) == 0
+
+    def test_copyright_beyond_first_20_lines(self):
+        """Test that copyright beyond first 20 lines is not extracted."""
+        lines = ["Line " + str(i) for i in range(25)]
+        lines[22] = "Copyright (c) 2024, Far Down Company"
+        license_text = "\n".join(lines)
+
+        copyrights = extract_copyright_from_license_text(license_text)
+        # Should not find it since it's beyond line 20
+        assert len(copyrights) == 0

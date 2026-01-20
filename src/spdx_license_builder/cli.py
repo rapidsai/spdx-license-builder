@@ -76,9 +76,9 @@ Examples:
         help="Write output to file instead of stdout",
     )
     parser.add_argument(
-        "--with-licenses",
+        "--no-license-text",
         action="store_true",
-        help="Include full license text for each SPDX license type found",
+        help="Exclude full license text for SPDX entries (enabled by default)",
     )
 
     # Deduplication options
@@ -139,7 +139,7 @@ def _run_license_builder(args) -> None:
     # Build the report using LicenseReportBuilder
     builder = LicenseReportBuilder(
         project_paths=project_paths,
-        with_licenses=args.with_licenses,
+        with_licenses=not args.no_license_text,  # Enabled by default
         deduplicate_rapids=args.deduplicate_rapids,
         deduplicate_hierarchical=args.deduplicate_hierarchical,
         normalize_years=not args.no_normalize_years,  # Enabled by default

@@ -18,25 +18,19 @@ license-builder /path/to/project --output LICENSE
 
 The `license-builder` tool extracts license information using two complementary methods:
 
-**Note:** By default, copyright year ranges are normalized for better deduplication (e.g., "2020-2023" and "2022-2024" from the same holder are treated as equivalent). Use `--no-normalize-years` to disable this.
-
 ### 1. **SPDX Copyright Extraction**
 
 Scans source files for SPDX headers to find third-party code:
 - Parses `SPDX-FileCopyrightText` and `SPDX-License-Identifier` tags
-- Extracts non-NVIDIA third-party copyright information
-- Groups files by copyright holder and license type
-- Optionally includes full license texts
 
 ### 2. **LICENSE File Copying**
 
 Finds standalone LICENSE files in dependencies:
-- Searches for LICENSE files in project directories
+- Searches for common license file patterns (LICENSE, COPYING, COPYRIGHT, NOTICE)
+- Includes build directories where dependencies are typically located
 - Reads full license text from each file
-- Automatically deduplicates identical licenses
-- Shows all locations sharing the same license
 
-**By default, both modes run** to provide complete license coverage. Use `--no-extract` or `--no-copy` to disable one.
+**Note:** By default, copyright year ranges are normalized for better deduplication (e.g., "2020-2023" and "2022-2024" from the same holder are treated as equivalent). Use `--no-normalize-years` to disable this.
 
 ---
 
@@ -48,17 +42,8 @@ Finds standalone LICENSE files in dependencies:
 # Run both modes (recommended - complete license information)
 license-builder /path/to/project --output LICENSE
 
-# SPDX entries only (skip LICENSE file search)
-license-builder /path/to/project --no-copy
-
-# LICENSE files only (skip SPDX header scanning)
-license-builder /path/to/project --no-extract
-
 # Multiple projects
 license-builder /path/to/project1 /path/to/project2 --output LICENSE
-
-# With full license texts for SPDX (extract) entries
-license-builder /path/to/project --with-licenses --output LICENSE
 ```
 
 ### Advanced Options
@@ -75,7 +60,6 @@ license-builder /path/to/project --no-normalize-years
 
 # Combine all features
 license-builder /path/to/project \\
-  --with-licenses \\
   --deduplicate-rapids \\
   --deduplicate-hierarchical \\
   --output LICENSE
@@ -85,98 +69,137 @@ license-builder /path/to/project \\
 
 ## Output Format
 
-When running both modes (default), the output contains two sections:
+The tool produces a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers (extract mode) and LICENSE files (copy mode):
 
-### Section 1: SPDX Copyright Entries
+### Example 1: License from SPDX Headers Only
 
-Files with third-party code identified by SPDX headers:
-
-```
-================================================================================
-SECTION 1: Third-Party Code in Source Files (SPDX Entries)
-================================================================================
-
-The following files contain third-party code with SPDX copyright headers.
-
---------------------------------------------------------------------------------
-File: Select.cuh
---------------------------------------------------------------------------------
-
-  Locations:
-    cudf: cpp/include/cudf/detail/utilities/Select.cuh
-    cuml: cpp/src/neighbors/Select.cuh
-    raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
-
-  License: Apache-2.0 AND MIT
-
-    Copyright (c) Facebook, Inc. and its affiliates
-
---------------------------------------------------------------------------------
-File: bsd_file.h
---------------------------------------------------------------------------------
-
-  Locations:
-    project: cpp/include/bsd_file.h
-
-  License: BSD-3-Clause
-
-    Copyright (c) 2020-2023 Example Corporation
-```
-
-**Key features:**
-- Files grouped by filename across projects
-- Shows all locations where the file appears
-- Lists copyright holders and license types
-- Optionally includes full license texts (with `--with-licenses`)
-
-### Section 2: Dependency LICENSE Files
-
-Standalone LICENSE files found in dependencies:
+When code includes SPDX tags, copyright info is extracted:
 
 ```
 ================================================================================
-SECTION 2: Dependency LICENSE Files
+License: Apache-2.0 AND MIT
 ================================================================================
 
-The following LICENSE files were found in dependency directories.
+Files with SPDX headers:
 
---------------------------------------------------------------------------------
-  Locations:
-    project: cpp/third_party/fmt/LICENSE
+  Select.cuh:
+    Copyright (c) 2019-2023, Facebook, Inc. and its affiliates
+      cudf: cpp/include/cudf/detail/utilities/Select.cuh
+      cuml: cpp/src/neighbors/Select.cuh
+      raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
 
-  License Text:
+Full License Text:
 
-    Copyright (c) 2012 - present, Victor Zverovich
+  --- Apache-2.0 ---
 
-    Permission is hereby granted, free of charge, to any person obtaining
-    a copy of this software and associated documentation files (the
-    "Software"), to deal in the Software without restriction, including
-    without limitation the rights to use, copy, modify, merge, publish,
-    distribute, sublicense, and/or sell copies of the Software, and to
-    permit persons to whom the Software is furnished to do so, subject to
-    the following conditions:
+  Apache License
+  Version 2.0, January 2004
+  http://www.apache.org/licenses/
 
-    The above copyright notice and this permission notice shall be
-    included in all copies or substantial portions of the Software.
+  TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+  1. Definitions...
+  (full Apache 2.0 license text)
 
---------------------------------------------------------------------------------
+  --- MIT ---
+
+  MIT License
+
+  Permission is hereby granted, free of charge...
+  (full MIT license text)
 ```
 
-## When to Use Each Mode
+### Example 2: License from SPDX Headers + LICENSE Files
 
-| Mode | Use Case | Command |
-|------|----------|---------|
-| **Both (default)** | Complete license report for distributions | `license-builder /path/to/project` |
-| **SPDX only** | Analyze in-tree third-party code | `license-builder /path/to/project --no-copy` |
-| **LICENSE only** | Check vendored dependencies | `license-builder /path/to/project --no-extract` |
+When the same license identifier appears in both sources, they are unified:
+
+```
+================================================================================
+License: BSD-3-Clause
+================================================================================
+
+Files with SPDX headers:
+
+  bsd_file.h:
+    Copyright (c) 2020-2023, Example Corporation
+      myproject: cpp/include/bsd_file.h
+
+LICENSE files:
+
+  Copyright (c) 2018-2022, Some BSD Library Contributors
+    myproject: cpp/third_party/some_bsd_lib/LICENSE
+
+  Copyright (c) 2015-2023, Another BSD Project
+    myproject: build/_deps/another_bsd_lib/COPYING
+
+Full License Text:
+
+  Copyright (c) <year> <owner>.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met...
+  (full BSD-3-Clause license text)
+```
+
+### Example 3: Detected License from LICENSE File
+
+When LICENSE files contain recognizable license text, they are automatically classified and grouped with SPDX entries of the same type:
+
+```
+================================================================================
+License: MIT
+================================================================================
+
+Files with SPDX headers:
+
+  utils.cpp:
+    Copyright (c) 2023, My Company
+      myproject: cpp/src/utils.cpp
+
+LICENSE files:
+
+  Copyright (c) 2012 - present, Victor Zverovich
+    myproject: cpp/third_party/fmt/LICENSE
+
+  Copyright (c) 2016 - 2024, Gabi Melman
+    myproject: build/_deps/spdlog/LICENSE
+
+Full License Text:
+
+  MIT License
+
+  Permission is hereby granted, free of charge, to any person obtaining
+  a copy of this software and associated documentation files (the
+  "Software"), to deal in the Software without restriction, including
+  without limitation the rights to use, copy, modify, merge, publish,
+  distribute, sublicense, and/or sell copies of the Software...
+  (full MIT license text)
+```
+
+### Example 4: Unrecognized LICENSE Files
+
+For LICENSE files with unrecognizable or custom licenses, each is kept separate:
+
+```
+================================================================================
+License: Unrecognized license: cpp/third_party/custom_lib/LICENSE
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2024, Custom Corp. All rights reserved.
+    myproject: cpp/third_party/custom_lib/LICENSE
+
+Full License Text:
+
+  Custom License Agreement
+
+  Copyright (c) 2024, Custom Corp. All rights reserved.
+
+  This software is provided under the following terms...
+  (full custom license text)
+```
 
 ---
 

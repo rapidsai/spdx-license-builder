@@ -47,13 +47,21 @@ from .license_records import (
     SpdxCopyright,
     SpdxEntry,
 )
-from .utility import get_license_text, get_project_relative_path, walk_directories_for_files
+from .utility import (
+    detect_license_type,
+    extract_copyright_from_license_text,
+    get_license_text,
+    get_project_relative_path,
+    walk_directories_for_files,
+)
 
 __all__ = [
     # Utility functions
     "get_project_relative_path",
     "get_license_text",
     "walk_directories_for_files",
+    "detect_license_type",
+    "extract_copyright_from_license_text",
     # Deduplication functions
     "normalize_copyright_years",
     "compute_normalized_hash",

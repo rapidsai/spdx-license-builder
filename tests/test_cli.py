@@ -110,12 +110,12 @@ class TestCLI:
 
         assert exc_info.value.code == 0
 
-    def test_with_licenses_flag(self, monkeypatch, test_project_dir):
-        """Test --with-licenses flag."""
+    def test_no_license_text_flag(self, monkeypatch, test_project_dir):
+        """Test --no-license-text flag."""
         from spdx_license_builder.cli import main
 
         monkeypatch.setattr(
-            sys, "argv", ["license-builder", str(test_project_dir), "--with-licenses"]
+            sys, "argv", ["license-builder", str(test_project_dir), "--no-license-text"]
         )
 
         with pytest.raises(SystemExit) as exc_info:

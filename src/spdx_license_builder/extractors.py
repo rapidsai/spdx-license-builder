@@ -29,6 +29,7 @@ from .license_records import (
     LicenseText,
     SpdxCopyright,
     SpdxEntry,
+    UnifiedLicenseEntry,
 )
 from .utility import get_license_text, get_project_relative_path, walk_directories_for_files
 
@@ -59,13 +60,21 @@ _SPDX_ADDITIONAL_EXCLUDES: frozenset[str] = frozenset(
     }
 )
 
-# Dependency extraction excludes language-specific dirs in addition to SPDX exclusions
+# Dependency extraction excludes language-specific dirs but NOT build (where deps are)
 _DEPENDENCY_ADDITIONAL_EXCLUDES: frozenset[str] = _SPDX_ADDITIONAL_EXCLUDES | frozenset(
     {
         "python",
         "rust",
     }
 )
+
+# Common license file patterns to search for
+_LICENSE_FILE_PATTERNS: List[str] = [
+    "LICENSE",
+    "COPYING",
+    "COPYRIGHT",
+    "NOTICE",
+]
 
 
 class LicenseExtractor:
@@ -388,8 +397,14 @@ class DependencyLicenseExtractor(LicenseExtractor):
 
     @staticmethod
     def _default_excluded_dirs() -> Tuple[str, ...]:
-        """Return directories to exclude for dependency license extraction (base + language/test dirs)."""
-        return tuple(_BASE_EXCLUDED_DIRS | _DEPENDENCY_ADDITIONAL_EXCLUDES)
+        """
+        Return directories to exclude for dependency license extraction.
+
+        Note: Includes language/test dirs but NOT 'build' (where dependencies are often located).
+        """
+        # Start with base exclusions but remove "build" since deps are often there
+        base_without_build = _BASE_EXCLUDED_DIRS - {"build"}
+        return tuple(base_without_build | _DEPENDENCY_ADDITIONAL_EXCLUDES)
 
     def __init__(
         self,
@@ -458,6 +473,9 @@ class DependencyLicenseExtractor(LicenseExtractor):
         """
         Process a single project to find and extract LICENSE files.
 
+        Searches for files matching common license file patterns (LICENSE, COPYING, etc.)
+        including in build directories where dependencies are often located.
+
         Updates self.content_map and self.total_files.
 
         Args:
@@ -465,12 +483,12 @@ class DependencyLicenseExtractor(LicenseExtractor):
         """
         self._log(f"  Scanning project: {project_path}")
 
-        # Find all LICENSE files
+        # Find all license files using common patterns
         matching_files = walk_directories_for_files(
-            str(project_path), self.directories_to_exclude, "LICENSE"
+            str(project_path), self.directories_to_exclude, _LICENSE_FILE_PATTERNS
         )
 
-        self._log(f"  Found {len(matching_files)} LICENSE file(s)")
+        self._log(f"  Found {len(matching_files)} license file(s)")
         self.total_files += len(matching_files)
 
         # Process each LICENSE file
@@ -581,7 +599,10 @@ class LicenseReportBuilder:
         )
         dep_content_map = dep_extractor.extract()
 
-        # Build SPDX entries
+        # Build unified entries (groups by license ID)
+        unified_entries = self._build_unified_entries(spdx_file_map, dep_content_map)
+
+        # Build SPDX entries (for backward compatibility)
         spdx_entries = self._build_spdx_entries(spdx_file_map)
 
         # Build license texts (if requested)
@@ -589,7 +610,7 @@ class LicenseReportBuilder:
         if self.with_licenses:
             license_texts = self._build_license_texts(spdx_file_map)
 
-        # Build dependency licenses
+        # Build dependency licenses (for backward compatibility)
         dependency_licenses = self._build_dependency_licenses(dep_content_map)
 
         if self.verbose:
@@ -599,6 +620,7 @@ class LicenseReportBuilder:
             spdx_entries=spdx_entries,
             license_texts=license_texts,
             dependency_licenses=dependency_licenses,
+            unified_entries=unified_entries,
         )
 
     def _build_spdx_entries(self, file_map: Dict[str, Dict[str, Any]]) -> List[SpdxEntry]:
@@ -664,6 +686,175 @@ class LicenseReportBuilder:
                         license_texts.append(LicenseText(license_id=component, text=text))
 
         return license_texts
+
+    def _build_unified_entries(
+        self, spdx_file_map: Dict[str, Dict[str, Any]], dep_content_map: Dict[str, Dict[str, Any]]
+    ) -> List[UnifiedLicenseEntry]:
+        """
+        Build unified license entries that group by license identifier.
+
+        Args:
+            spdx_file_map: Map of SPDX files and their licenses
+            dep_content_map: Map of dependency LICENSE files
+
+        Returns:
+            List of UnifiedLicenseEntry objects grouped by license ID
+        """
+        # Dictionary to accumulate data: license_id -> UnifiedLicenseEntry data
+        unified_map = {}
+
+        # Step 1: Process SPDX entries
+        for filename in spdx_file_map:
+            file_info = spdx_file_map[filename]
+            file_paths = file_info["paths"]
+
+            # Build location mapping for this file
+            locations_by_project = {}
+            for fpath in file_paths:
+                matching_root = None
+                for proj_path in self.project_paths:
+                    if fpath.startswith(str(proj_path)):
+                        matching_root = str(proj_path)
+                        break
+                project_name, rel_path = get_project_relative_path(
+                    fpath, project_root=matching_root
+                )
+                project_key = project_name if project_name else "unknown"
+                if project_key not in locations_by_project:
+                    locations_by_project[project_key] = set()
+                locations_by_project[project_key].add(rel_path)
+
+            # Group by license type
+            for copyright_info in file_info["licenses"]:
+                license_id = copyright_info.license_type
+
+                if license_id not in unified_map:
+                    unified_map[license_id] = {
+                        "spdx_files": {},
+                        "license_files": {},
+                        "license_file_copyrights": {},
+                        "license_text": None,
+                    }
+
+                # Add this file to the SPDX files for this license
+                if filename not in unified_map[license_id]["spdx_files"]:
+                    unified_map[license_id]["spdx_files"][filename] = {
+                        "locations": {},
+                        "copyrights": [],
+                    }
+
+                # Merge locations
+                for proj, paths in locations_by_project.items():
+                    if proj not in unified_map[license_id]["spdx_files"][filename]["locations"]:
+                        unified_map[license_id]["spdx_files"][filename]["locations"][proj] = set()
+                    unified_map[license_id]["spdx_files"][filename]["locations"][proj].update(paths)
+
+                # Add copyright info
+                unified_map[license_id]["spdx_files"][filename]["copyrights"].append(
+                    (copyright_info.year_range, copyright_info.owner)
+                )
+
+        # Step 2: Process dependency LICENSE files
+        # Try to detect license type from content; use unique paths for unrecognized licenses
+        from .utility import detect_license_type, extract_copyright_from_license_text
+
+        for _content_hash, file_info in dep_content_map.items():
+            file_paths_dict = file_info["paths"]
+            license_content = file_info["content"]
+
+            # Extract copyright from license content
+            copyrights = extract_copyright_from_license_text(license_content)
+
+            # Build location mapping and copyright mapping for THIS iteration only
+            locations = {}
+            current_file_copyrights = {}
+
+            for full_path, rel_path in file_paths_dict.items():
+                matching_root = None
+                for proj_path in self.project_paths:
+                    if full_path.startswith(str(proj_path)):
+                        matching_root = str(proj_path)
+                        break
+                project_name, _rel = get_project_relative_path(
+                    full_path, project_root=matching_root
+                )
+                project_key = project_name if project_name else "unknown"
+                if project_key not in locations:
+                    locations[project_key] = set()
+                locations[project_key].add(rel_path)
+
+                # Store copyright for this file path
+                if copyrights:
+                    current_file_copyrights[rel_path] = copyrights
+
+            # Try to detect the license type from the content
+            detected_license = detect_license_type(license_content)
+
+            if detected_license:
+                # Use detected license ID - this will be grouped with SPDX entries of same type
+                license_id = detected_license
+            else:
+                # For unrecognized licenses, create unique identifier using file paths
+                # This ensures each different unrecognized license is kept separate
+                file_paths_list = sorted(file_paths_dict.values())
+                if file_paths_list:
+                    # Use the first path as the unique identifier
+                    license_id = f"Unrecognized license: {file_paths_list[0]}"
+                else:
+                    # Fallback to content hash
+                    license_id = f"Unrecognized license: {_content_hash[:8]}"
+
+            # Add or merge into unified entry for this license
+            if license_id not in unified_map:
+                unified_map[license_id] = {
+                    "spdx_files": {},
+                    "license_files": locations,
+                    "license_file_copyrights": current_file_copyrights.copy(),
+                    "license_text": license_content if not detected_license else None,
+                }
+            else:
+                # Merge locations into existing entry
+                for project_key, paths in locations.items():
+                    if project_key not in unified_map[license_id]["license_files"]:
+                        unified_map[license_id]["license_files"][project_key] = set()
+                    unified_map[license_id]["license_files"][project_key].update(paths)
+                # Merge copyright info for these specific files
+                unified_map[license_id]["license_file_copyrights"].update(current_file_copyrights)
+
+        # Step 3: Add full license texts for SPDX licenses
+        if self.with_licenses:
+            base_path = Path(__file__).parent
+            for license_id in unified_map:
+                if unified_map[license_id]["license_text"] is None:
+                    # Parse compound licenses
+                    license_components = SpdxExtractor._parse_license_components(license_id)
+                    if len(license_components) == 1:
+                        # Single license - get its text
+                        text = get_license_text(license_components[0], base_path)
+                        unified_map[license_id]["license_text"] = text
+                    else:
+                        # Compound license - concatenate texts
+                        combined_text = []
+                        for component in license_components:
+                            text = get_license_text(component, base_path)
+                            if text:
+                                combined_text.append(f"--- {component} ---\n\n{text}")
+                        unified_map[license_id]["license_text"] = "\n\n".join(combined_text)
+
+        # Step 4: Convert to UnifiedLicenseEntry objects
+        unified_entries = []
+        for license_id in sorted(unified_map.keys()):
+            data = unified_map[license_id]
+            entry = UnifiedLicenseEntry(
+                license_id=license_id,
+                spdx_files=data["spdx_files"],
+                license_files=data["license_files"],
+                license_file_copyrights=data.get("license_file_copyrights", {}),
+                license_text=data["license_text"],
+            )
+            unified_entries.append(entry)
+
+        return unified_entries
 
     def _build_dependency_licenses(
         self, content_map: Dict[str, Dict[str, Any]]
