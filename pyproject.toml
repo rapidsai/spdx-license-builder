@@ -36,15 +36,11 @@ dev = [
     "pytest-xdist>=3.0",
     "ruff>=0.8.0",
     "pre-commit>=3.0",
+    "mypy>=1.0",
 ]
 
 [project.scripts]
-# Primary unified CLI
 license-builder = "spdx_license_builder.cli:main"
-
-# Legacy commands (kept for backward compatibility)
-extract-licenses-via-spdx = "spdx_license_builder.extract_licenses_via_spdx:main"
-find-and-copy-license-files = "spdx_license_builder.find_and_copy_license_files:main"
 
 [project.urls]
 Homepage = "https://github.com/rapidsai/spdx-license-builder"

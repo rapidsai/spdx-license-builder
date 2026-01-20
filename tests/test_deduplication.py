@@ -13,14 +13,14 @@ import hashlib
 from spdx_license_builder.deduplication import (
     RAPIDS_PROJECTS,
     compute_normalized_hash,
+    get_directory_depth,
     group_licenses_with_deduplication,
-    is_cccl_component,
-    is_cccl_root,
     is_nvidia_project,
+    is_parent_path,
     is_rapids_project,
     normalize_copyright_years,
     should_deduplicate_rapids_license,
-    should_skip_cccl_component_license,
+    should_prefer_parent_license,
 )
 
 
@@ -55,25 +55,28 @@ class TestProjectDetection:
 
         assert not is_nvidia_project("/path/to/other/LICENSE")
 
-    def test_cccl_component_detection(self):
-        """Test CCCL component detection."""
-        assert is_cccl_component("/path/to/cccl/thrust/LICENSE") == "thrust"
-        assert is_cccl_component("/path/to/cccl/cub/LICENSE") == "cub"
-        assert is_cccl_component("/path/to/cccl/libcudacxx/LICENSE") == "libcudacxx"
-        assert is_cccl_component("/build/thrust-src/LICENSE") == "thrust"
+    def test_directory_depth(self):
+        """Test directory depth calculation."""
+        # Parent directory parts count (includes root "/")
+        assert get_directory_depth("/path/to/file.txt") == 3  # "/", "path", "to"
+        assert get_directory_depth("/root/file.txt") == 2  # "/", "root"
+        assert get_directory_depth("/file.txt") == 1  # "/"
+        assert get_directory_depth("/a/b/c/d/file.txt") == 5  # "/", "a", "b", "c", "d"
 
-        assert is_cccl_component("/path/to/other/LICENSE") is None
-        assert is_cccl_component("/path/to/cccl/LICENSE") is None
+    def test_parent_path_detection(self):
+        """Test hierarchical path relationship detection."""
+        # True parent relationships
+        assert is_parent_path("/path/to/cccl/LICENSE", "/path/to/cccl/thrust/LICENSE")
+        assert is_parent_path("/path/to/cccl/LICENSE", "/path/to/cccl/cub/lib/LICENSE")
 
-    def test_cccl_root_detection(self):
-        """Test CCCL root LICENSE detection."""
-        assert is_cccl_root("/path/to/cccl/LICENSE")
-        assert is_cccl_root("/build/cccl-src/LICENSE")
-        assert is_cccl_root("/opt/cccl/include/../LICENSE")
-
-        assert not is_cccl_root("/path/to/cccl/thrust/LICENSE")
-        assert not is_cccl_root("/path/to/cccl/cub/LICENSE")
-        assert not is_cccl_root("/path/to/other/LICENSE")
+        # Not parent relationships
+        assert not is_parent_path("/path/to/cccl/LICENSE", "/path/to/cccl/LICENSE")  # Same path
+        assert not is_parent_path(
+            "/path/to/cccl/LICENSE", "/path/to/other/LICENSE"
+        )  # Different branch
+        assert not is_parent_path(
+            "/path/to/cccl/thrust/LICENSE", "/path/to/cccl/LICENSE"
+        )  # Child->parent
 
 
 class TestRapidsDeduplication:
@@ -108,39 +111,36 @@ Copyright (c) 2020-2023, NVIDIA CORPORATION."""
         assert not should_deduplicate_rapids_license(rapids_paths, mit_license)
 
 
-class TestCcclHandling:
-    """Test CCCL special handling logic."""
+class TestHierarchicalDeduplication:
+    """Test hierarchical license deduplication (prefer parent over child)."""
 
-    def test_skip_component_with_root(self):
-        """Test that components are skipped when root exists."""
-        all_paths = {
-            "/path/to/cccl/LICENSE",
-            "/path/to/cccl/thrust/LICENSE",
-            "/path/to/cccl/cub/LICENSE",
-            "/path/to/cccl/libcudacxx/LICENSE",
-        }
+    def test_prefer_parent_with_root(self):
+        """Test that child licenses are skipped when parent exists."""
+        parent_paths = {"/path/to/cccl/LICENSE"}
 
-        # Components should be skipped
-        assert should_skip_cccl_component_license("/path/to/cccl/thrust/LICENSE", all_paths)
-        assert should_skip_cccl_component_license("/path/to/cccl/cub/LICENSE", all_paths)
-        assert should_skip_cccl_component_license("/path/to/cccl/libcudacxx/LICENSE", all_paths)
+        # Children should be skipped in favor of parent
+        assert should_prefer_parent_license(parent_paths, "/path/to/cccl/thrust/LICENSE")
+        assert should_prefer_parent_license(parent_paths, "/path/to/cccl/cub/LICENSE")
+        assert should_prefer_parent_license(parent_paths, "/path/to/cccl/libcudacxx/LICENSE")
 
-        # Root should not be skipped
-        assert not should_skip_cccl_component_license("/path/to/cccl/LICENSE", all_paths)
+        # Parent itself should not be skipped
+        assert not should_prefer_parent_license(parent_paths, "/path/to/cccl/LICENSE")
 
-    def test_dont_skip_component_without_root(self):
-        """Test that components are not skipped when root doesn't exist."""
-        paths_no_root = {"/path/to/cccl/thrust/LICENSE", "/path/to/cccl/cub/LICENSE"}
+    def test_no_preference_without_parent(self):
+        """Test that child licenses are not skipped when no parent exists."""
+        parent_paths = set()  # No parents
 
-        # Without root, components should not be skipped
-        assert not should_skip_cccl_component_license("/path/to/cccl/thrust/LICENSE", paths_no_root)
-        assert not should_skip_cccl_component_license("/path/to/cccl/cub/LICENSE", paths_no_root)
+        # Without parent, nothing should be skipped
+        assert not should_prefer_parent_license(parent_paths, "/path/to/cccl/thrust/LICENSE")
+        assert not should_prefer_parent_license(parent_paths, "/path/to/cccl/cub/LICENSE")
 
-    def test_non_cccl_not_skipped(self):
-        """Test that non-CCCL paths are never skipped."""
-        all_paths = {"/path/to/cccl/LICENSE", "/path/to/other/LICENSE"}
+    def test_unrelated_paths_not_affected(self):
+        """Test that unrelated paths are not affected by hierarchical deduplication."""
+        parent_paths = {"/path/to/cccl/LICENSE"}
 
-        assert not should_skip_cccl_component_license("/path/to/other/LICENSE", all_paths)
+        # Unrelated paths should not be affected
+        assert not should_prefer_parent_license(parent_paths, "/path/to/other/LICENSE")
+        assert not should_prefer_parent_license(parent_paths, "/different/path/LICENSE")
 
 
 class TestYearNormalization:
@@ -220,7 +220,10 @@ class TestGroupLicensesWithDeduplication:
         }
 
         result = group_licenses_with_deduplication(
-            content_map, use_year_normalization=True, deduplicate_rapids=False, handle_cccl=False
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=False,
         )
 
         # Should be merged into one
@@ -248,7 +251,10 @@ class TestGroupLicensesWithDeduplication:
         }
 
         result = group_licenses_with_deduplication(
-            content_map, use_year_normalization=False, deduplicate_rapids=True, handle_cccl=False
+            content_map,
+            use_year_normalization=False,
+            deduplicate_rapids=True,
+            deduplicate_hierarchical=False,
         )
 
         # Should be merged into one
@@ -258,35 +264,45 @@ class TestGroupLicensesWithDeduplication:
         for info in result.values():
             assert len(info["paths"]) == 2
 
-    def test_cccl_handling(self):
-        """Test that CCCL component licenses are filtered."""
+    def test_hierarchical_handling(self):
+        """Test hierarchical license deduplication."""
         license_text = "Apache License\nVersion 2.0"
+        # In reality, identical content would have the same hash
+        content_hash = "samehash"
 
         content_map = {
-            "root": {
+            content_hash: {
                 "content": license_text,
                 "filenames": {"LICENSE"},
-                "paths": {"/path/to/cccl/LICENSE": "cccl/LICENSE"},
-            },
-            "thrust": {
-                "content": license_text,
-                "filenames": {"LICENSE"},
-                "paths": {"/path/to/cccl/thrust/LICENSE": "cccl/thrust/LICENSE"},
-            },
-            "cub": {
-                "content": license_text,
-                "filenames": {"LICENSE"},
-                "paths": {"/path/to/cccl/cub/LICENSE": "cccl/cub/LICENSE"},
+                "paths": {
+                    "/path/to/cccl/LICENSE": "cccl/LICENSE",
+                    "/path/to/cccl/thrust/LICENSE": "cccl/thrust/LICENSE",
+                    "/path/to/cccl/cub/LICENSE": "cccl/cub/LICENSE",
+                },
             },
         }
 
-        result = group_licenses_with_deduplication(
-            content_map, use_year_normalization=False, deduplicate_rapids=False, handle_cccl=True
+        # Safe default: keeps all paths
+        safe_result = group_licenses_with_deduplication(
+            content_map,
+            use_year_normalization=False,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=False,
         )
+        assert len(safe_result) == 1
+        assert len(safe_result[content_hash]["paths"]) == 3
 
-        # Should only have root, components filtered out
-        assert len(result) == 1
-        assert "root" in result
+        # Risky opt-in: filters child paths
+        risky_result = group_licenses_with_deduplication(
+            content_map,
+            use_year_normalization=False,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=True,
+        )
+        assert len(risky_result) == 1
+        # Should only keep parent, not children
+        assert "/path/to/cccl/LICENSE" in risky_result[content_hash]["paths"]
+        assert "/path/to/cccl/thrust/LICENSE" not in risky_result[content_hash]["paths"]
 
     def test_no_deduplication(self):
         """Test that no deduplication preserves all licenses."""
@@ -307,7 +323,10 @@ class TestGroupLicensesWithDeduplication:
         }
 
         result = group_licenses_with_deduplication(
-            content_map, use_year_normalization=False, deduplicate_rapids=False, handle_cccl=False
+            content_map,
+            use_year_normalization=False,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=False,
         )
 
         # Should preserve both
@@ -341,7 +360,10 @@ class TestGroupLicensesWithDeduplication:
         }
 
         result = group_licenses_with_deduplication(
-            content_map, use_year_normalization=True, deduplicate_rapids=True, handle_cccl=True
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=True,
+            deduplicate_hierarchical=True,
         )
 
         # Should have 2: one for RAPIDS (merged), one for CCCL root

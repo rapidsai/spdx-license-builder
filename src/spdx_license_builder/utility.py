@@ -14,16 +14,22 @@ import re
 import sys
 import urllib.request
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 
-def get_project_relative_path(file_path, project_root=None):
+def get_project_relative_path(
+    file_path: str, project_root: Optional[str] = None
+) -> Tuple[Optional[str], str]:
     """
     Extract the project name and relative path from a file path using heuristics.
 
     Heuristics (in priority order):
     1. If a directory has a '-src' suffix, that's the project name (highest priority)
+       - Common in CMake build directories for extracted dependencies
     2. If a directory is 'c' or 'cpp', the parent directory is the project name
+       - Common in monorepos with language-specific subdirectories
     3. If project_root is provided, use its basename as the project name
+       - Allows explicit project boundary definition
 
     Args:
         file_path: Full file path
@@ -66,24 +72,21 @@ def get_project_relative_path(file_path, project_root=None):
     if c_cpp_match:
         return c_cpp_match
 
-    # If project_root is provided, use it as fallback
+    # Heuristic 3: Use project_root if provided
     if project_root:
         project_root_path = Path(project_root)
-        project_name = project_root_path.name
         try:
-            # Get relative path from project root
-            file_path_obj = Path(file_path)
-            relative_path = str(file_path_obj.relative_to(project_root_path))
-            return (project_name, relative_path)
+            relative = Path(file_path).relative_to(project_root_path)
+            return project_root_path.name, str(relative)
         except ValueError:
-            # file_path is not relative to project_root
+            # file_path is not under project_root
             pass
 
-    # No project found, return just the filename
-    return (None, filename)
+    # No project detected - return just the filename
+    return None, filename
 
 
-def get_license_text(license_type, base_path):
+def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
     """
     Read license text from local cache or fetch from SPDX API.
 
@@ -172,27 +175,30 @@ def get_license_text(license_type, base_path):
         raise
 
 
-def walk_directories_for_files(dir_path, directories_to_exclude, file_pattern):
+def walk_directories_for_files(
+    dir_path: str, directories_to_exclude: Tuple[str, ...], file_pattern: str
+) -> List[str]:
     """
     Walk through specified directories and collect all files matching a pattern.
 
     Args:
-        base_path: Base path to start searching from
-        directories_to_exclude: set of directory to not walk (e.g., ("python", "rust"))
-        file_pattern: Pattern to match files (e.g., "LICENSE*")
+        dir_path: Base path to start searching from
+        directories_to_exclude: Tuple of directory names to exclude (e.g., ("python", "rust"))
+        file_pattern: Pattern to match files (e.g., "LICENSE")
 
     Returns:
         List of file paths that match the pattern
     """
     matching_files = []
-    print(f"Scanning directory: {dir_path}", file=sys.stderr)
-    for root, dirs, files in os.walk(dir_path):
-        dirs[:] = [d for d in dirs if d not in directories_to_exclude]
+    excluded = set(directories_to_exclude)
 
+    for root, dirs, files in os.walk(dir_path, topdown=True):
+        # Filter directories in-place to prune tree traversal
+        dirs[:] = [d for d in dirs if d not in excluded]
+
+        # Filter matching files
         for file in files:
-            # Check if file matches the pattern (starts with)
             if file.startswith(file_pattern):
-                file_path = os.path.join(root, file)
-                matching_files.append(file_path)
+                matching_files.append(os.path.join(root, file))
 
     return matching_files

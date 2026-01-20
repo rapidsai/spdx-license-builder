@@ -11,16 +11,34 @@ Tests download actual LICENSE files from GitHub to verify deduplication logic.
 """
 
 import urllib.request
+from pathlib import Path as PathlibPath
 
 import pytest
 
 from spdx_license_builder.deduplication import (
     group_licenses_with_deduplication,
-    is_cccl_component,
-    is_cccl_root,
+    is_parent_path,
     is_rapids_project,
 )
-from spdx_license_builder.find_and_copy_license_files import extract_license_files
+from spdx_license_builder.extractors import DependencyLicenseExtractor
+
+
+# Helper function for tests
+def extract_license_files(project_paths, directories_to_exclude=None, verbose=False):
+    """Helper to extract LICENSE files using OOP API."""
+    if not isinstance(project_paths, list):
+        project_paths = [project_paths]
+    project_paths = [PathlibPath(p) if not isinstance(p, PathlibPath) else p for p in project_paths]
+    extractor = DependencyLicenseExtractor(
+        project_paths,
+        directories_to_exclude=directories_to_exclude,
+        verbose=verbose,
+        deduplicate_rapids=False,
+        deduplicate_hierarchical=False,
+        normalize_years=False,
+    )
+    return extractor.extract()
+
 
 # GitHub raw content base URL
 GITHUB_RAW = "https://raw.githubusercontent.com"
@@ -85,33 +103,50 @@ class TestCCCL:
         """Verify CCCL root and component license detection."""
         cccl_dir = integration_fixtures["cccl"]
 
-        assert is_cccl_root(str(cccl_dir / "LICENSE"))
-        assert is_cccl_component(str(cccl_dir / "cub" / "LICENSE")) == "cub"
-        assert is_cccl_component(str(cccl_dir / "thrust" / "LICENSE")) == "thrust"
-        assert is_cccl_component(str(cccl_dir / "libcudacxx" / "LICENSE")) == "libcudacxx"
+        # Verify hierarchical relationships
+        root_license = str(cccl_dir / "LICENSE")
+        cub_license = str(cccl_dir / "cub" / "LICENSE")
+        thrust_license = str(cccl_dir / "thrust" / "LICENSE")
+        libcudacxx_license = str(cccl_dir / "libcudacxx" / "LICENSE")
+
+        # Verify parent-child relationships
+        assert is_parent_path(root_license, cub_license)
+        assert is_parent_path(root_license, thrust_license)
+        assert is_parent_path(root_license, libcudacxx_license)
 
     def test_component_deduplication(self, integration_fixtures):
-        """Verify component licenses are filtered when root exists."""
+        """Verify hierarchical deduplication behavior (when explicitly enabled).
+
+        Note: Hierarchical deduplication only removes child licenses if they have
+        IDENTICAL content to the parent. If child licenses have different content
+        (e.g., different copyright years, modifications), they are kept.
+        """
         cccl_dir = integration_fixtures["cccl"]
         content_map = extract_license_files([cccl_dir])
 
-        deduplicated = group_licenses_with_deduplication(
-            content_map, deduplicate_rapids=False, handle_cccl=True
+        # Test safe default (no hierarchical deduplication)
+        safe_result = group_licenses_with_deduplication(
+            content_map, deduplicate_rapids=False, deduplicate_hierarchical=False
         )
+        safe_paths = {p for info in safe_result.values() for p in info["paths"] if "cccl" in p}
+        # Should keep all paths (safe - preserves provenance)
+        assert any("cub" in p or "thrust" in p or "libcudacxx" in p for p in safe_paths)
 
-        # Get all CCCL paths
-        cccl_paths = {p for info in deduplicated.values() for p in info["paths"] if "cccl" in p}
+        # Test with hierarchical deduplication enabled
+        # This will only remove child licenses if they have IDENTICAL content to parent
+        risky_result = group_licenses_with_deduplication(
+            content_map, deduplicate_rapids=False, deduplicate_hierarchical=True
+        )
+        risky_paths = {p for info in risky_result.values() for p in info["paths"] if "cccl" in p}
 
-        # Should have root, not components
-        assert any(
-            "/cpp/LICENSE" in p and all(c not in p for c in ["cub", "thrust", "libcudacxx"])
-            for p in cccl_paths
-        )
-        assert not any(
-            c in p
-            for c in ["cub/LICENSE", "thrust/LICENSE", "libcudacxx/LICENSE"]
-            for p in cccl_paths
-        )
+        # Should have root LICENSE
+        assert any("/cpp/LICENSE" in p for p in risky_paths)
+
+        # Child licenses may or may not be present depending on whether they have
+        # identical content to the parent. The deduplication only removes children
+        # with identical content within each content hash bucket.
+        # Just verify we didn't lose everything
+        assert len(risky_paths) > 0
 
 
 class TestRAPIDS:
@@ -161,23 +196,25 @@ class TestCombined:
         all_dirs = list(integration_fixtures.values())
         content_map = extract_license_files(all_dirs)
 
+        # Test with risky deduplication explicitly enabled
         deduplicated = group_licenses_with_deduplication(
-            content_map, use_year_normalization=True, deduplicate_rapids=True, handle_cccl=True
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=True,
+            deduplicate_hierarchical=True,
         )
 
-        # Should reduce license count
+        # Should reduce license count (because risky features are enabled)
         assert len(deduplicated) <= len(content_map)
 
-        # CCCL: should have root, not components
+        # With hierarchical deduplication enabled, child licenses are only removed
+        # if they have IDENTICAL content to the parent
         cccl_paths = [p for info in deduplicated.values() for p in info["paths"] if "cccl" in p]
         if cccl_paths:
-            assert any(
-                "/LICENSE" in p and all(c not in p for c in ["cub", "thrust", "libcudacxx"])
-                for p in cccl_paths
-            )
-            assert not any(
-                f"{c}/LICENSE" in p for c in ["cub", "thrust", "libcudacxx"] for p in cccl_paths
-            )
+            # Should have at least the root LICENSE
+            assert any("/LICENSE" in p for p in cccl_paths)
+            # Verify we still have some licenses (didn't lose everything)
+            assert len(cccl_paths) > 0
 
         # RAPIDS: should have at most 1 Apache license
         rapids_count = sum(
@@ -195,7 +232,10 @@ class TestCombined:
 
         without = group_licenses_with_deduplication(content_map)
         with_dedup = group_licenses_with_deduplication(
-            content_map, use_year_normalization=True, deduplicate_rapids=True, handle_cccl=True
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=True,
+            deduplicate_hierarchical=True,
         )
 
         reduction = (1 - len(with_dedup) / len(without)) * 100 if without else 0

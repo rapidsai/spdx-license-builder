@@ -8,6 +8,7 @@
 Tests for utility functions.
 """
 
+from spdx_license_builder.extractors import SpdxExtractor
 from spdx_license_builder.utility import get_license_text, get_project_relative_path
 
 
@@ -145,10 +146,8 @@ class TestCopyrightParsing:
 
     def test_parse_simple_copyright(self):
         """Test parsing of simple copyright line."""
-        from spdx_license_builder.extract_licenses_via_spdx import extract_copyright_info
-
         line = "Copyright (c) 2020 Example Corporation"
-        result = extract_copyright_info(line)
+        result = SpdxExtractor._extract_copyright_info(line)
 
         assert result is not None
         years, owner = result
@@ -157,10 +156,8 @@ class TestCopyrightParsing:
 
     def test_parse_copyright_with_range(self):
         """Test parsing copyright with year range."""
-        from spdx_license_builder.extract_licenses_via_spdx import extract_copyright_info
-
         line = "Copyright (c) 2014-2022 Frank Example"
-        result = extract_copyright_info(line)
+        result = SpdxExtractor._extract_copyright_info(line)
 
         assert result is not None
         years, owner = result
@@ -169,10 +166,8 @@ class TestCopyrightParsing:
 
     def test_parse_copyright_no_year(self):
         """Test parsing copyright without year."""
-        from spdx_license_builder.extract_licenses_via_spdx import extract_copyright_info
-
         line = "Copyright (c) Facebook, Inc. and its affiliates"
-        result = extract_copyright_info(line)
+        result = SpdxExtractor._extract_copyright_info(line)
 
         assert result is not None
         years, owner = result
@@ -181,10 +176,8 @@ class TestCopyrightParsing:
 
     def test_parse_copyright_with_parentheses_no_c(self):
         """Test parsing copyright with parentheses but no 'c'."""
-        from spdx_license_builder.extract_licenses_via_spdx import extract_copyright_info
-
         line = "Copyright (2019) Sandia Corporation"
-        result = extract_copyright_info(line)
+        result = SpdxExtractor._extract_copyright_info(line)
 
         assert result is not None
         years, owner = result
@@ -193,10 +186,8 @@ class TestCopyrightParsing:
 
     def test_parse_copyright_all_rights_reserved(self):
         """Test that 'All rights reserved' is stripped."""
-        from spdx_license_builder.extract_licenses_via_spdx import extract_copyright_info
-
         line = "Copyright (c) 2020 Example Corp. All rights reserved."
-        result = extract_copyright_info(line)
+        result = SpdxExtractor._extract_copyright_info(line)
 
         assert result is not None
         years, owner = result
@@ -210,43 +201,33 @@ class TestLicenseComponentParsing:
 
     def test_parse_single_license(self):
         """Test parsing single license identifier."""
-        from spdx_license_builder.extract_licenses_via_spdx import parse_license_components
-
-        result = parse_license_components("Apache-2.0")
+        result = SpdxExtractor._parse_license_components("Apache-2.0")
         assert result == ["Apache-2.0"]
 
     def test_parse_license_with_and(self):
         """Test parsing license with AND operator."""
-        from spdx_license_builder.extract_licenses_via_spdx import parse_license_components
-
-        result = parse_license_components("Apache-2.0 AND MIT")
+        result = SpdxExtractor._parse_license_components("Apache-2.0 AND MIT")
         assert len(result) == 2
         assert "Apache-2.0" in result
         assert "MIT" in result
 
     def test_parse_license_with_or(self):
         """Test parsing license with OR operator."""
-        from spdx_license_builder.extract_licenses_via_spdx import parse_license_components
-
-        result = parse_license_components("MIT OR Apache-2.0")
+        result = SpdxExtractor._parse_license_components("MIT OR Apache-2.0")
         assert len(result) == 2
         assert "MIT" in result
         assert "Apache-2.0" in result
 
     def test_parse_license_with_with(self):
         """Test parsing license with WITH operator."""
-        from spdx_license_builder.extract_licenses_via_spdx import parse_license_components
-
-        result = parse_license_components("Apache-2.0 WITH LLVM-exception")
+        result = SpdxExtractor._parse_license_components("Apache-2.0 WITH LLVM-exception")
         assert len(result) == 2
         assert "Apache-2.0" in result
         assert "LLVM-exception" in result
 
     def test_parse_complex_license(self):
         """Test parsing complex compound license."""
-        from spdx_license_builder.extract_licenses_via_spdx import parse_license_components
-
-        result = parse_license_components("Apache-2.0 AND MIT OR BSD-3-Clause")
+        result = SpdxExtractor._parse_license_components("Apache-2.0 AND MIT OR BSD-3-Clause")
         assert len(result) == 3
         assert "Apache-2.0" in result
         assert "MIT" in result

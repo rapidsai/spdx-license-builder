@@ -9,10 +9,27 @@ Integration tests for SPDX extraction functionality.
 """
 
 from pathlib import Path
+from pathlib import Path as PathlibPath
 
 import pytest
 
-from spdx_license_builder.extract_licenses_via_spdx import find_spdx_entries, walk_directories
+from spdx_license_builder.extractors import SpdxExtractor
+
+
+# Helper functions for tests
+def find_spdx_entries(file_path: str):
+    """Helper to extract SPDX entries from a single file using OOP API."""
+    extractor = SpdxExtractor([PathlibPath(file_path).parent], verbose=False)
+    return extractor._find_spdx_entries(file_path)
+
+
+def walk_directories(dir_path: str, directories_to_exclude):
+    """Helper to walk directories and extract SPDX entries using OOP API."""
+    extractor = SpdxExtractor(
+        [PathlibPath(dir_path)], directories_to_exclude=directories_to_exclude, verbose=False
+    )
+    extractor._walk_directory(dir_path)
+    return extractor.file_map
 
 
 class TestFindSpdxEntries:
@@ -33,11 +50,11 @@ int main() { return 0; }
         entries = find_spdx_entries(str(test_file))
 
         assert len(entries) == 1
-        license_type, year_range, owner, file_path = entries[0]
-        assert license_type == "MIT"
-        assert year_range == "2020"
-        assert owner == "Example Corporation"
-        assert file_path == str(test_file)
+        entry = entries[0]
+        assert entry.license_type == "MIT"
+        assert entry.year_range == "2020"
+        assert entry.owner == "Example Corporation"
+        assert entry.file_path == str(test_file)
 
     def test_extract_multiple_copyrights_same_license(self, tmp_path):
         """Test extracting multiple copyrights for the same license."""
@@ -57,13 +74,13 @@ void foo() {}
         assert len(entries) == 2
 
         # Check both companies are captured
-        owners = [entry[2] for entry in entries]
+        owners = [entry.owner for entry in entries]
         assert "Company A" in owners
         assert "Company B" in owners
 
         # Both should have Apache-2.0 license
         for entry in entries:
-            assert entry[0] == "Apache-2.0"
+            assert entry.license_type == "Apache-2.0"
 
     def test_ignore_nvidia_copyright(self, tmp_path):
         """Test that NVIDIA copyrights are ignored."""
@@ -84,9 +101,9 @@ void foo() {}
 
         # Should only get the Third Party Corp entry
         assert len(entries) == 1
-        license_type, year_range, owner, file_path = entries[0]
-        assert owner == "Third Party Corp"
-        assert license_type == "MIT"
+        entry = entries[0]
+        assert entry.owner == "Third Party Corp"
+        assert entry.license_type == "MIT"
 
     def test_compound_license(self, tmp_path):
         """Test extraction of compound license (AND/OR)."""
@@ -103,10 +120,10 @@ void foo() {}
         entries = find_spdx_entries(str(test_file))
 
         assert len(entries) == 1
-        license_type, year_range, owner, file_path = entries[0]
-        assert license_type == "Apache-2.0 AND MIT"
-        assert owner == "Facebook, Inc. and its affiliates"
-        assert year_range == ""  # No year in this copyright
+        entry = entries[0]
+        assert entry.license_type == "Apache-2.0 AND MIT"
+        assert entry.owner == "Facebook, Inc. and its affiliates"
+        assert entry.year_range == ""  # No year in this copyright
 
     def test_no_spdx_headers(self, tmp_path):
         """Test file with no SPDX headers."""
@@ -159,8 +176,8 @@ class TestWalkDirectories:
 
         # Check that NVIDIA files are excluded
         for _filename, info in file_map.items():
-            for _license_type, _year_range, owner in info["licenses"]:
-                assert "NVIDIA" not in owner.upper()
+            for copyright_info in info["licenses"]:
+                assert "NVIDIA" not in copyright_info.owner.upper()
 
     def test_grouping_by_filename(self):
         """Test that files with the same name are grouped together."""
@@ -212,8 +229,8 @@ class TestWalkDirectories:
         # Should only find source.cpp, not test.cpp
         found_owners = []
         for _filename, info in file_map.items():
-            for _license_type, _year_range, owner in info["licenses"]:
-                found_owners.append(owner)
+            for copyright_info in info["licenses"]:
+                found_owners.append(copyright_info.owner)
 
         assert "Example" in found_owners
         assert "Test Corp" not in found_owners
@@ -237,10 +254,8 @@ class TestSpdxOutputFormat:
             # Multiple files can share the same license/copyright
             assert len(info["licenses"]) >= 1
 
-            # Each license entry should have (license_type, year_range, owner)
+            # Each license entry should be a CopyrightInfo dataclass
             for license_entry in info["licenses"]:
-                assert len(license_entry) == 3
-                license_type, year_range, owner = license_entry
-                assert isinstance(license_type, str)
-                assert isinstance(year_range, str)
-                assert isinstance(owner, str)
+                assert isinstance(license_entry.license_type, str)
+                assert isinstance(license_entry.year_range, str)
+                assert isinstance(license_entry.owner, str)

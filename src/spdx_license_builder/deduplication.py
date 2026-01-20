@@ -16,7 +16,7 @@ Provides advanced deduplication logic for:
 import hashlib
 import re
 from pathlib import Path
-from typing import Optional, Set
+from typing import Any, Dict, Set
 
 # Known RAPIDS projects (all use Apache-2.0)
 RAPIDS_PROJECTS = {
@@ -50,9 +50,6 @@ NVIDIA_PROJECTS = {
     "raft",
     "cuco",
 }
-
-# CCCL sub-components
-CCCL_COMPONENTS = {"cub", "thrust", "libcudacxx"}
 
 
 def is_rapids_project(path: str) -> bool:
@@ -101,55 +98,67 @@ def is_nvidia_project(path: str) -> bool:
     return False
 
 
-def is_cccl_component(path: str) -> Optional[str]:
+def is_parent_path(parent: str, child: str) -> bool:
     """
-    Check if a path belongs to a CCCL sub-component.
+    Check if one path's directory is a parent of another path's directory.
+
+    For LICENSE files, this checks if the parent LICENSE is in a parent directory
+    of the child LICENSE file.
 
     Args:
-        path: File path to check
+        parent: Potential parent path (typically a LICENSE file)
+        child: Potential child path (typically a LICENSE file)
 
     Returns:
-        Component name if found, None otherwise
+        True if parent's directory is an ancestor of child's directory
     """
-    path_parts = Path(path).parts
+    try:
+        # Get parent directories (not the files themselves)
+        parent_dir = Path(parent).parent.resolve()
+        child_dir = Path(child).parent.resolve()
 
-    for part in path_parts:
-        part_lower = part.lower()
-        part_clean = part_lower.replace("-src", "").replace("_src", "")
+        # Try to get relative path from parent dir to child dir
+        # If it succeeds and doesn't start with "..", then parent is ancestor
+        try:
+            rel_path = child_dir.relative_to(parent_dir)
+            # Make sure they're not the same directory
+            return str(rel_path) != "."
+        except ValueError:
+            return False
+    except (ValueError, OSError):
+        return False
 
-        if part_clean in CCCL_COMPONENTS:
-            return part_clean
 
-    return None
-
-
-def is_cccl_root(path: str) -> bool:
+def get_directory_depth(path: str) -> int:
     """
-    Check if a path is the CCCL root LICENSE.
+    Get the directory depth of a path.
 
     Args:
-        path: File path to check
+        path: File path
 
     Returns:
-        True if this is the CCCL root LICENSE
+        Number of directory levels
     """
-    path_parts = Path(path).parts
+    return len(Path(path).parent.parts)
 
-    # Look for "cccl" in path but NOT followed by a component name
-    for i, part in enumerate(path_parts):
-        part_lower = part.lower()
-        part_clean = part_lower.replace("-src", "").replace("_src", "")
 
-        if part_clean == "cccl":
-            # Check if the next part is a component
-            if i + 1 < len(path_parts):
-                next_part = path_parts[i + 1].lower()
-                if next_part not in CCCL_COMPONENTS:
-                    return True
-            else:
-                return True
+def should_prefer_parent_license(parent_paths: Set[str], child_path: str) -> bool:
+    """
+    Determine if a child license should be skipped in favor of a parent license.
 
-    return False
+    When multiple LICENSE files exist in a hierarchy with the same content,
+    prefer the one at the higher level (closer to root). This handles cases like:
+    - CCCL root license vs component licenses (thrust, cub, libcudacxx)
+    - Any project with both root and subdirectory licenses
+
+    Args:
+        parent_paths: Set of paths that might be parents
+        child_path: Path to check if it's a child
+
+    Returns:
+        True if child_path should be skipped in favor of a parent
+    """
+    return any(is_parent_path(parent_path, child_path) for parent_path in parent_paths)
 
 
 def normalize_copyright_years(text: str) -> str:
@@ -224,94 +233,130 @@ def should_deduplicate_rapids_license(paths: Set[str], license_text: str) -> boo
     return all(is_rapids_project(str(path)) for path in paths)
 
 
-def should_skip_cccl_component_license(path: str, all_paths: Set[str]) -> bool:
+def find_parent_licenses_with_same_content(
+    path: str, all_licenses: Dict[str, Dict[str, Any]], content_hash: str
+) -> Set[str]:
     """
-    Determine if a CCCL component license should be skipped.
-
-    If we have the CCCL root LICENSE, we should skip component licenses
-    since the root LICENSE contains all of them.
+    Find parent directory licenses with the same content.
 
     Args:
-        path: Path to the component LICENSE
-        all_paths: All LICENSE file paths found
+        path: Path to check
+        all_licenses: Dictionary of all licenses (content_hash -> info)
+        content_hash: Content hash of the license at path
 
     Returns:
-        True if this component license should be skipped
+        Set of parent paths with the same content
     """
-    # Check if this is a CCCL component
-    component = is_cccl_component(path)
-    if not component:
-        return False
+    parent_paths = set()
 
-    # Check if we have the CCCL root license
-    has_root = any(is_cccl_root(str(p)) for p in all_paths)
+    # Look through all licenses with the same content hash
+    for hash_key, info in all_licenses.items():
+        if hash_key != content_hash:
+            continue
 
-    return has_root
+        for other_path in info["paths"]:
+            if is_parent_path(other_path, path):
+                parent_paths.add(other_path)
+
+    return parent_paths
 
 
 def group_licenses_with_deduplication(
     content_map: dict,
-    use_year_normalization: bool = True,
-    deduplicate_rapids: bool = True,
-    handle_cccl: bool = True,
+    use_year_normalization: bool = False,
+    deduplicate_rapids: bool = False,
+    deduplicate_hierarchical: bool = False,
 ) -> dict:
     """
-    Apply advanced deduplication logic to license content map.
+    Apply content-based deduplication to license content map.
+
+    By default, only deduplicates licenses with IDENTICAL content (via SHA256 hash).
+    This is the safest approach that preserves all attribution and provenance.
+
+    Optional deduplication modes (USE WITH CAUTION):
+    - year_normalization: Treats licenses as identical if they differ only in years
+      WARNING: May merge licenses from different copyright holders
+    - deduplicate_rapids: Groups RAPIDS projects' Apache-2.0 licenses
+      WARNING: Loses individual project attribution
+    - deduplicate_hierarchical: Prefers parent over child licenses with identical content
+      WARNING: Loses information about which subdirectories have licenses
 
     Args:
         content_map: Original content map (hash -> {content, filenames, paths})
-        use_year_normalization: Enable year normalization
-        deduplicate_rapids: Enable RAPIDS deduplication
-        handle_cccl: Enable CCCL special handling
+        use_year_normalization: Enable year normalization (default: False)
+        deduplicate_rapids: Enable RAPIDS deduplication (default: False)
+        deduplicate_hierarchical: Prefer parent licenses (default: False)
 
     Returns:
-        Deduplicated content map
+        Deduplicated content map (by default, only exact content matches are merged)
     """
-    if not any([use_year_normalization, deduplicate_rapids, handle_cccl]):
-        # No deduplication requested
+    # Content-based deduplication is already done via SHA256 hashing in extract_license_files
+    # The content_map keys ARE the content hashes, so identical licenses are already grouped
+
+    if not any([use_year_normalization, deduplicate_rapids, deduplicate_hierarchical]):
+        # No additional deduplication requested - return as-is
+        # Licenses with identical content are already grouped by hash
         return content_map
 
     result = {}
     rapids_apache_seen = False
     rapids_apache_key = None
-    all_paths = set()
-
-    # Collect all paths
-    for info in content_map.values():
-        all_paths.update(info["paths"].keys())
 
     for content_hash, info in content_map.items():
         content = info["content"]
-        paths = set(info["paths"].keys())
+        paths_dict = info["paths"].copy()  # Make a copy to modify
 
-        # CCCL handling: skip component licenses if we have root
-        if handle_cccl:
-            # Check if all paths are CCCL components that should be skipped
-            skip_all = all(should_skip_cccl_component_license(p, all_paths) for p in paths)
-            if skip_all:
+        # Hierarchical deduplication: remove child paths if parent exists with same content
+        # WARNING: This loses provenance information about subdirectories
+        if deduplicate_hierarchical:
+            # Get all paths with the same content (same hash or normalized hash)
+            same_content_paths = set(paths_dict.keys())
+
+            # Find paths to remove (children of other paths with same content)
+            paths_to_remove = set()
+            for path in list(paths_dict.keys()):
+                for other_path in same_content_paths:
+                    if other_path != path and is_parent_path(other_path, path):
+                        # Found a parent with same content - mark child for removal
+                        paths_to_remove.add(path)
+                        break
+
+            # Remove child paths
+            for path in paths_to_remove:
+                del paths_dict[path]
+
+            # If all paths were removed, skip this entry entirely
+            if not paths_dict:
                 continue
 
+            # Update the info with filtered paths
+            info = {
+                "content": content,
+                "filenames": info["filenames"],
+                "paths": paths_dict,
+            }
+
         # RAPIDS deduplication
-        if deduplicate_rapids and should_deduplicate_rapids_license(paths, content):
+        # WARNING: This merges different copyright holders/years from different projects
+        if deduplicate_rapids and should_deduplicate_rapids_license(
+            set(paths_dict.keys()), content
+        ):
             if rapids_apache_seen:
-                # Merge with existing RAPIDS Apache license
                 result[rapids_apache_key]["paths"].update(info["paths"])
                 result[rapids_apache_key]["filenames"].update(info["filenames"])
                 continue
             else:
-                # First RAPIDS Apache license
                 rapids_apache_seen = True
                 rapids_apache_key = content_hash
 
         # Year normalization
+        # WARNING: May merge licenses from different copyright holders
         if use_year_normalization:
             normalized_hash = compute_normalized_hash(content)
 
-            # Check if we already have this normalized license
             found = False
             for _existing_hash, existing_info in result.items():
                 if compute_normalized_hash(existing_info["content"]) == normalized_hash:
-                    # Merge with existing
                     existing_info["paths"].update(info["paths"])
                     existing_info["filenames"].update(info["filenames"])
                     found = True
@@ -320,7 +365,6 @@ def group_licenses_with_deduplication(
             if found:
                 continue
 
-        # Add to result
         result[content_hash] = info
 
     return result

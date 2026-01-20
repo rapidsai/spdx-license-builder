@@ -209,6 +209,52 @@ python -m spdx_license_builder copy /path/to/project
 
 ---
 
+## Python API
+
+In addition to the CLI, `spdx-license-builder` provides a powerful Python API for programmatic use.
+
+### Quick Start
+
+```python
+from pathlib import Path
+from spdx_license_builder import LicenseReportBuilder
+
+# Build a complete license report
+builder = LicenseReportBuilder(
+    project_paths=[Path("/path/to/project")],
+    with_licenses=True,
+    deduplicate_rapids=True,
+    handle_cccl=True,
+    normalize_years=True
+)
+
+report = builder.build()
+
+# Write to file
+with open("LICENSE", "w") as f:
+    report.write(f)
+```
+
+### Available Classes
+
+- **`LicenseReportBuilder`** - High-level builder for complete reports
+- **`SpdxExtractor`** - Extract SPDX copyright entries from source files
+- **`DependencyLicenseExtractor`** - Extract LICENSE files from dependencies
+- **`SpdxEntry`, `LicenseText`, `DependencyLicense`, `LicenseReport`** - Data classes
+
+### Examples
+
+See the [`examples/`](examples/) directory for comprehensive usage examples:
+- Basic SPDX extraction
+- Dependency license extraction
+- Complete report generation
+- Custom processing and analysis
+- Multi-project scanning
+
+For detailed API documentation, see [`examples/README.md`](examples/README.md).
+
+---
+
 ## License
 
 SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.

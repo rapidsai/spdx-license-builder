@@ -10,11 +10,29 @@ Integration tests for LICENSE file copying functionality.
 
 import hashlib
 from pathlib import Path
+from pathlib import Path as PathlibPath
 
 import pytest
 
-from spdx_license_builder.find_and_copy_license_files import extract_license_files
+from spdx_license_builder.extractors import DependencyLicenseExtractor
 from spdx_license_builder.utility import walk_directories_for_files
+
+
+# Helper function for tests
+def extract_license_files(project_paths, directories_to_exclude=None, verbose=False):
+    """Helper to extract LICENSE files using OOP API."""
+    if not isinstance(project_paths, list):
+        project_paths = [project_paths]
+    project_paths = [PathlibPath(p) if not isinstance(p, PathlibPath) else p for p in project_paths]
+    extractor = DependencyLicenseExtractor(
+        project_paths,
+        directories_to_exclude=directories_to_exclude,
+        verbose=verbose,
+        deduplicate_rapids=False,
+        deduplicate_hierarchical=False,
+        normalize_years=False,
+    )
+    return extractor.extract()
 
 
 class TestWalkDirectoriesForFiles:
@@ -318,43 +336,35 @@ Licensed under the Apache License, Version 2.0..."""
         mit_license = "MIT License..."
         assert not should_deduplicate_rapids_license(rapids_paths, mit_license)
 
-    def test_cccl_special_handling(self):
-        """Test special handling of CCCL licenses."""
+    def test_hierarchical_deduplication(self):
+        """Test hierarchical license deduplication."""
         from spdx_license_builder.deduplication import (
-            is_cccl_component,
-            is_cccl_root,
-            should_skip_cccl_component_license,
+            is_parent_path,
+            should_prefer_parent_license,
         )
 
-        # Test component detection
-        assert is_cccl_component("/path/to/cccl/thrust/LICENSE") == "thrust"
-        assert is_cccl_component("/path/to/cccl/cub/LICENSE") == "cub"
-        assert is_cccl_component("/path/to/cccl/libcudacxx/LICENSE") == "libcudacxx"
-        assert is_cccl_component("/path/to/other/LICENSE") is None
+        # Test parent-child path detection
+        assert is_parent_path("/path/to/cccl/LICENSE", "/path/to/cccl/thrust/LICENSE")
+        assert is_parent_path("/path/to/cccl/LICENSE", "/path/to/cccl/cub/LICENSE")
+        assert is_parent_path("/path/to/cccl/LICENSE", "/path/to/cccl/libcudacxx/LICENSE")
+        assert not is_parent_path(
+            "/path/to/cccl/thrust/LICENSE", "/path/to/cccl/LICENSE"
+        )  # Child->parent
+        assert not is_parent_path("/path/to/other/LICENSE", "/path/to/cccl/LICENSE")  # Unrelated
 
-        # Test root detection
-        assert is_cccl_root("/path/to/cccl/LICENSE")
-        assert is_cccl_root("/build/cccl-src/LICENSE")
-        assert not is_cccl_root("/path/to/cccl/thrust/LICENSE")
-        assert not is_cccl_root("/path/to/other/LICENSE")
+        # Test preference for parent licenses
+        parent_paths = {"/path/to/cccl/LICENSE"}
 
-        # Test skip logic
-        all_paths = {
-            "/path/to/cccl/LICENSE",
-            "/path/to/cccl/thrust/LICENSE",
-            "/path/to/cccl/cub/LICENSE",
-        }
+        # Children should be skipped when parent exists
+        assert should_prefer_parent_license(parent_paths, "/path/to/cccl/thrust/LICENSE")
+        assert should_prefer_parent_license(parent_paths, "/path/to/cccl/cub/LICENSE")
 
-        # Component should be skipped when root exists
-        assert should_skip_cccl_component_license("/path/to/cccl/thrust/LICENSE", all_paths)
-        assert should_skip_cccl_component_license("/path/to/cccl/cub/LICENSE", all_paths)
+        # Parent itself should not be skipped
+        assert not should_prefer_parent_license(parent_paths, "/path/to/cccl/LICENSE")
 
-        # Root should not be skipped
-        assert not should_skip_cccl_component_license("/path/to/cccl/LICENSE", all_paths)
-
-        # Without root, components should not be skipped
-        paths_no_root = {"/path/to/cccl/thrust/LICENSE", "/path/to/cccl/cub/LICENSE"}
-        assert not should_skip_cccl_component_license("/path/to/cccl/thrust/LICENSE", paths_no_root)
+        # Without parent, children should not be skipped
+        empty_parents = set()
+        assert not should_prefer_parent_license(empty_parents, "/path/to/cccl/thrust/LICENSE")
 
 
 class TestLicenseYearNormalization:
@@ -439,7 +449,10 @@ Licensed under the Apache License, Version 2.0..."""
 
         # With year normalization, should be deduplicated
         result = group_licenses_with_deduplication(
-            content_map, use_year_normalization=True, deduplicate_rapids=False, handle_cccl=False
+            content_map,
+            use_year_normalization=True,
+            deduplicate_rapids=False,
+            deduplicate_hierarchical=False,
         )
 
         # Should be merged into one
