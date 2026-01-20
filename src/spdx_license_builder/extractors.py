@@ -412,7 +412,8 @@ class DependencyLicenseExtractor(LicenseExtractor):
             deduplicate_hierarchical: Prefer parent licenses over child licenses (default: False)
                                       WARNING: May lose subdirectory provenance information
             normalize_years: Enable copyright year normalization (default: False)
-                            WARNING: May merge licenses from different copyright holders
+                            Normalizes year ranges (e.g., '2020-2023' vs '2022-2024')
+                            while preserving copyright holder differences
         """
         super().__init__(project_paths, directories_to_exclude, verbose)
         self.deduplicate_rapids = deduplicate_rapids
@@ -540,7 +541,8 @@ class LicenseReportBuilder:
             deduplicate_hierarchical: Prefer parent licenses over child licenses (default: False)
                                       WARNING: May lose subdirectory provenance information
             normalize_years: Enable copyright year normalization (default: False)
-                            WARNING: May merge licenses from different copyright holders
+                            Normalizes year ranges (e.g., '2020-2023' vs '2022-2024')
+                            while preserving copyright holder differences
             verbose: Whether to print progress messages
         """
         self.project_paths = project_paths

@@ -275,7 +275,7 @@ def group_licenses_with_deduplication(
 
     Optional deduplication modes (USE WITH CAUTION):
     - year_normalization: Treats licenses as identical if they differ only in years
-      WARNING: May merge licenses from different copyright holders
+      (while preserving copyright holder differences)
     - deduplicate_rapids: Groups RAPIDS projects' Apache-2.0 licenses
       WARNING: Loses individual project attribution
     - deduplicate_hierarchical: Prefers parent over child licenses with identical content
@@ -350,7 +350,7 @@ def group_licenses_with_deduplication(
                 rapids_apache_key = content_hash
 
         # Year normalization
-        # WARNING: May merge licenses from different copyright holders
+        # Normalizes year ranges while preserving copyright holder differences
         if use_year_normalization:
             normalized_hash = compute_normalized_hash(content)
 
