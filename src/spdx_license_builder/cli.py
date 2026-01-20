@@ -112,6 +112,13 @@ Examples:
         help="Output results in JSON format instead of text",
     )
 
+    # Filtering options
+    parser.add_argument(
+        "--exclude-nvidia",
+        action="store_true",
+        help="Filter out NVIDIA copyrights from SPDX entries (default: include all)",
+    )
+
     args = parser.parse_args()
 
     # Validate that at least one mode is enabled
@@ -163,6 +170,7 @@ def _run_license_builder(args) -> None:
         verbose=True,
         parallel=parallel,
         max_workers=args.max_workers,
+        exclude_nvidia=args.exclude_nvidia,
     )
 
     report = builder.build()

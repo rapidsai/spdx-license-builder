@@ -17,16 +17,21 @@ from spdx_license_builder.extractors import SpdxExtractor
 
 
 # Helper functions for tests
-def find_spdx_entries(file_path: str):
+def find_spdx_entries(file_path: str, exclude_nvidia: bool = True):
     """Helper to extract SPDX entries from a single file using OOP API."""
-    extractor = SpdxExtractor([PathlibPath(file_path).parent], verbose=False)
+    extractor = SpdxExtractor(
+        [PathlibPath(file_path).parent], verbose=False, exclude_nvidia=exclude_nvidia
+    )
     return extractor._find_spdx_entries(file_path)
 
 
-def walk_directories(dir_path: str, directories_to_exclude):
+def walk_directories(dir_path: str, directories_to_exclude, exclude_nvidia: bool = True):
     """Helper to walk directories and extract SPDX entries using OOP API."""
     extractor = SpdxExtractor(
-        [PathlibPath(dir_path)], directories_to_exclude=directories_to_exclude, verbose=False
+        [PathlibPath(dir_path)],
+        directories_to_exclude=directories_to_exclude,
+        verbose=False,
+        exclude_nvidia=exclude_nvidia,
     )
     extractor._walk_directory(dir_path)
     return extractor.file_map
@@ -83,7 +88,7 @@ void foo() {}
             assert entry.license_type == "Apache-2.0"
 
     def test_ignore_nvidia_copyright(self, tmp_path):
-        """Test that NVIDIA copyrights are ignored."""
+        """Test that NVIDIA copyrights are filtered with exclude_nvidia=True."""
         test_file = tmp_path / "test.cpp"
         test_file.write_text(
             """
@@ -97,9 +102,9 @@ void foo() {}
 """
         )
 
-        entries = find_spdx_entries(str(test_file))
+        entries = find_spdx_entries(str(test_file), exclude_nvidia=True)
 
-        # Should only get the Third Party Corp entry
+        # Should only get the Third Party Corp entry when filtering
         assert len(entries) == 1
         entry = entries[0]
         assert entry.owner == "Third Party Corp"
@@ -169,12 +174,12 @@ class TestWalkDirectories:
             pytest.skip("Test fixtures not found")
 
         directories_to_exclude = ("test", "tests", "benchmark")
-        file_map = walk_directories(str(fixtures_path), directories_to_exclude)
+        file_map = walk_directories(str(fixtures_path), directories_to_exclude, exclude_nvidia=True)
 
         # Should find facebook files (grouped)
         assert len(file_map) > 0
 
-        # Check that NVIDIA files are excluded
+        # Check that NVIDIA files are excluded when using exclude_nvidia=True
         for _filename, info in file_map.items():
             for copyright_info in info["licenses"]:
                 assert "NVIDIA" not in copyright_info.owner.upper()

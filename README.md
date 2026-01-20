@@ -97,6 +97,9 @@ license-builder /path/to/project --no-parallel --output LICENSE
 
 # Output in JSON format for programmatic use
 license-builder /path/to/project --json --output licenses.json
+
+# Filter out NVIDIA copyrights (for third-party-only reports)
+license-builder /path/to/project --exclude-nvidia --output LICENSE
 ```
 
 ---

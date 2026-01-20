@@ -223,8 +223,20 @@ class SpdxExtractor(LicenseExtractor):
         verbose: bool = True,
         parallel: Optional[bool] = None,
         max_workers: Optional[int] = None,
+        exclude_nvidia: bool = False,
     ):
-        """Initialize SPDX extractor with instance state for results."""
+        """
+        Initialize SPDX extractor with instance state for results.
+
+        Args:
+            project_paths: List of project paths to scan
+            directories_to_exclude: Optional tuple to completely replace default exclusions
+            additional_exclude_dirs: Optional tuple to add to default exclusions
+            verbose: Whether to print progress messages
+            parallel: Enable parallel processing (default: auto-detect, disabled in debugger)
+            max_workers: Maximum number of worker threads
+            exclude_nvidia: Filter out NVIDIA copyrights (default: False, include all)
+        """
         super().__init__(
             project_paths,
             directories_to_exclude,
@@ -236,6 +248,7 @@ class SpdxExtractor(LicenseExtractor):
         self.file_map = {}  # Store results on instance
         self.file_count = 0
         self.total_entries = 0
+        self.exclude_nvidia = exclude_nvidia
         self._lock = threading.Lock()  # Thread safety for parallel processing
 
     @staticmethod
@@ -257,16 +270,20 @@ class SpdxExtractor(LicenseExtractor):
             self._walk_directory(str(project_path))
 
         self._log(f"  Scanned {self.file_count} files")
-        self._log(f"  Found {self.total_entries} non-NVIDIA copyright entries")
+        entries_desc = (
+            "copyright entries" if not self.exclude_nvidia else "non-NVIDIA copyright entries"
+        )
+        self._log(f"  Found {self.total_entries} {entries_desc}")
         self._log(f"  In {len(self.file_map)} unique files with third-party licenses")
 
         return self.file_map
 
     def _walk_directory(self, dir_path: str) -> None:
         """
-        Walk through directory and collect all non-NVIDIA SPDX entries.
+        Walk through directory and collect SPDX entries.
 
         Updates self.file_map, self.file_count, and self.total_entries.
+        Optionally filters NVIDIA copyrights based on self.exclude_nvidia.
 
         Args:
             dir_path: Directory path to scan
@@ -391,6 +408,8 @@ class SpdxExtractor(LicenseExtractor):
                     # Validate years if needed (Pattern 4 requires this)
                     if validate_years and not re.match(r"^[\d\-,\s]+$", years):
                         continue
+                    # Clean up trailing commas/punctuation from years
+                    years = years.rstrip(",;").strip()
                 else:
                     # No years in this pattern (Pattern 3)
                     years = ""
@@ -400,14 +419,14 @@ class SpdxExtractor(LicenseExtractor):
 
     def _find_spdx_entries(self, file_path: str) -> List[SpdxCopyright]:
         """
-        Extract non-NVIDIA SPDX copyright entries from a file and associate them with licenses.
+        Extract SPDX copyright entries from a file and associate them with licenses.
 
         Args:
             file_path: Path to the file to scan for SPDX entries
 
         Returns:
             List of SpdxCopyright objects containing license info and file path.
-            Only includes non-NVIDIA copyrights.
+            Optionally excludes NVIDIA copyrights based on self.exclude_nvidia.
         """
         entries = []
 
@@ -421,12 +440,12 @@ class SpdxExtractor(LicenseExtractor):
 
                     # Look for SPDX-FileCopyrightText
                     if "SPDX-FileCopyrightText:" in line:
-                        # Check if it contains NVIDIA
-                        if "NVIDIA" in line.upper():
+                        # Check if it contains NVIDIA and should be filtered
+                        if self.exclude_nvidia and "NVIDIA" in line.upper():
                             i += 1
                             continue
 
-                        # This is a non-NVIDIA copyright, start collecting
+                        # Start collecting copyrights
                         copyrights = []
 
                         # Extract copyright from current line
@@ -459,9 +478,10 @@ class SpdxExtractor(LicenseExtractor):
                                         )
                                 break
 
-                            # If we hit another FileCopyrightText (non-NVIDIA), collect it
+                            # If we hit another FileCopyrightText, collect it (unless filtering NVIDIA)
                             elif "SPDX-FileCopyrightText:" in next_line:
-                                if "NVIDIA" not in next_line.upper():
+                                should_skip = self.exclude_nvidia and "NVIDIA" in next_line.upper()
+                                if not should_skip:
                                     copyright_info = self._extract_copyright_info(next_line)
                                     if copyright_info:
                                         copyrights.append(copyright_info)
@@ -655,6 +675,7 @@ class LicenseReportBuilder:
         verbose: bool = True,
         parallel: Optional[bool] = None,
         max_workers: Optional[int] = None,
+        exclude_nvidia: bool = False,
     ):
         """
         Initialize the license report builder.
@@ -666,11 +687,13 @@ class LicenseReportBuilder:
             verbose: Whether to print progress messages
             parallel: Enable parallel processing for faster scanning (default: True, auto-disabled in debugger)
             max_workers: Maximum number of worker threads for parallel processing (None = use default)
+            exclude_nvidia: Filter out NVIDIA copyrights from SPDX entries (default: False, include all)
         """
         self.project_paths = project_paths
         self.with_licenses = with_licenses
         self.additional_exclude_dirs = additional_exclude_dirs
         self.verbose = verbose
+        self.exclude_nvidia = exclude_nvidia
 
         # Auto-detect parallel mode: enabled by default, disabled in debugger
         if parallel is None:
@@ -715,6 +738,7 @@ class LicenseReportBuilder:
             verbose=self.verbose,
             parallel=self.parallel,
             max_workers=self.max_workers,
+            exclude_nvidia=self.exclude_nvidia,
         )
         spdx_file_map = spdx_extractor.extract()
 
