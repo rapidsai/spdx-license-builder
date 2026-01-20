@@ -106,6 +106,32 @@ def detect_license_type(license_content: str) -> Optional[str]:
         SPDX license identifier if detected, "Multiple-Licenses" for aggregate files,
         None otherwise
     """
+    matched_licenses = extract_all_licenses(license_content)
+
+    # If we found multiple distinct licenses, it's an aggregate file
+    if len(matched_licenses) >= 2:
+        return "Multiple-Licenses"
+
+    # Single license detected
+    if len(matched_licenses) == 1:
+        return matched_licenses[0]
+
+    return None
+
+
+def extract_all_licenses(license_content: str) -> List[str]:
+    """
+    Extract all license types from license file content.
+
+    Uses pattern matching against known license text signatures.
+    Useful for parsing aggregate license files that contain multiple licenses.
+
+    Args:
+        license_content: The full text content of the license file
+
+    Returns:
+        List of SPDX license identifiers found in the content
+    """
     # Normalize content for matching: lowercase, collapse whitespace
     normalized = re.sub(r"\s+", " ", license_content.lower().strip())
 
@@ -155,8 +181,7 @@ def detect_license_type(license_content: str) -> Optional[str]:
         ),
     ]
 
-    # Check for aggregate license files
-    # Count how many distinct license types are present
+    # Check for all license types present
     matched_licenses = []
     for pattern, license_id in patterns:
         if re.search(pattern, normalized):
@@ -166,15 +191,7 @@ def detect_license_type(license_content: str) -> Optional[str]:
                 continue
             matched_licenses.append(license_id)
 
-    # If we found multiple distinct licenses, it's an aggregate file
-    if len(matched_licenses) >= 2:
-        return "Multiple-Licenses"
-
-    # Single license detected
-    if len(matched_licenses) == 1:
-        return matched_licenses[0]
-
-    return None
+    return matched_licenses
 
 
 def get_project_relative_path(
@@ -370,3 +387,43 @@ def walk_directories_for_files(
                 matching_files.append(os.path.join(root, file))
 
     return matching_files
+
+
+def find_project_license_file(project_path: Path) -> Optional[Tuple[Path, str, List[str]]]:
+    """
+    Find and parse the main LICENSE file for a project.
+
+    Searches for LICENSE files at the project root and extracts all licenses contained within.
+
+    Args:
+        project_path: Path to the project root directory
+
+    Returns:
+        Tuple of (license_file_path, content, list_of_licenses) if found, None otherwise
+        The list_of_licenses contains SPDX identifiers found in the LICENSE file.
+    """
+    # Common license file names to search for (in priority order)
+    license_filenames = ["LICENSE", "COPYING", "COPYRIGHT", "LICENSE.txt", "LICENSE.md"]
+
+    for filename in license_filenames:
+        license_path = project_path / filename
+        if license_path.exists() and license_path.is_file():
+            try:
+                with open(license_path, encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+
+                # Extract all licenses from the content
+                licenses = extract_all_licenses(content)
+
+                return (license_path, content, licenses)
+            except (OSError, UnicodeDecodeError) as e:
+                print(
+                    f"Warning: Could not read project LICENSE file {license_path}: {e}",
+                    file=sys.stderr,
+                )
+                continue
+            except Exception as e:
+                print(f"Unexpected error reading {license_path}: {e}", file=sys.stderr)
+                raise
+
+    return None

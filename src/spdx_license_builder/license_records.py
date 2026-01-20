@@ -18,8 +18,9 @@ This module contains all data structures used throughout the license extraction 
 - LicenseReport: Complete combined report
 """
 
+import json
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, TextIO, Tuple
+from typing import Any, Dict, List, Optional, Set, TextIO, Tuple
 
 
 @dataclass(frozen=True)
@@ -162,6 +163,8 @@ class UnifiedLicenseEntry:
         license_files: Dict of {project: [paths]} for standalone LICENSE files
         license_file_copyrights: Dict mapping file_path -> List[(year, owner)] for LICENSE files
         license_text: Full text of the license
+        in_project_license: Whether this license is found in the project's main LICENSE file
+        validation_warnings: List of validation warnings for this license
     """
 
     license_id: str
@@ -173,6 +176,54 @@ class UnifiedLicenseEntry:
         default_factory=dict
     )  # path -> [(year, owner)]
     license_text: Optional[str] = None
+    in_project_license: Optional[bool] = None  # None = not checked, True = found, False = missing
+    validation_warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        # Convert spdx_files to have separate copyright and file paths
+        spdx_files_json = []
+        for filename, file_info in self.spdx_files.items():
+            locations = file_info.get("locations", {})
+            copyrights = file_info.get("copyrights", [])
+
+            # Flatten locations into list of {project, path} dicts
+            file_paths = []
+            for project in sorted(locations.keys()):
+                for path in sorted(locations[project]):
+                    file_paths.append({"project": project, "path": path})
+
+            # Convert copyrights to list of dicts
+            copyright_list = [
+                {"year_range": year_range, "owner": owner} for year_range, owner in copyrights
+            ]
+
+            spdx_files_json.append(
+                {"filename": filename, "paths": file_paths, "copyrights": copyright_list}
+            )
+
+        # Convert license_files to list format
+        license_files_json = []
+        for project in sorted(self.license_files.keys()):
+            for path in sorted(self.license_files[project]):
+                # Get copyrights for this specific file
+                copyrights = self.license_file_copyrights.get(path, [])
+                copyright_list = [
+                    {"year_range": year_range, "owner": owner} for year_range, owner in copyrights
+                ]
+
+                license_files_json.append(
+                    {"project": project, "path": path, "copyrights": copyright_list}
+                )
+
+        return {
+            "license_id": self.license_id,
+            "spdx_files": spdx_files_json,
+            "license_files": license_files_json,
+            "license_text": self.license_text,
+            "in_project_license": self.in_project_license,
+            "validation_warnings": self.validation_warnings,
+        }
 
     def write(self, out: TextIO) -> None:
         """Write this unified license entry to output."""
@@ -180,6 +231,20 @@ class UnifiedLicenseEntry:
         print(f"License: {self.license_id}", file=out)
         print("=" * 80, file=out)
         print(file=out)
+
+        # Show validation status if checked
+        if self.in_project_license is not None:
+            if self.in_project_license:
+                print("  [✓] License found in project LICENSE file", file=out)
+            else:
+                print("  [⚠] WARNING: License NOT found in project LICENSE file", file=out)
+            print(file=out)
+
+        # Show any validation warnings
+        if self.validation_warnings:
+            for warning in self.validation_warnings:
+                print(f"  [⚠] {warning}", file=out)
+            print(file=out)
 
         has_content = False
 
@@ -281,6 +346,20 @@ class LicenseReport:
     license_texts: List[LicenseText] = field(default_factory=list)
     dependency_licenses: List[DependencyLicense] = field(default_factory=list)
     unified_entries: List[UnifiedLicenseEntry] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary."""
+        return {
+            "licenses": [entry.to_dict() for entry in self.unified_entries],
+            "summary": {
+                "total_licenses": len(self.unified_entries),
+                "license_ids": [entry.license_id for entry in self.unified_entries],
+            },
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        """Convert to JSON string."""
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
     def write(self, out: TextIO) -> None:
         """Write the complete license report to output."""

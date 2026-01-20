@@ -6,7 +6,12 @@ Extract and manage license information from projects using SPDX headers and LICE
 
 ```bash
 # Install
-pip install spdx-license-builder
+pip install git+https://github.com/rapidsai/spdx-license-builder.git
+
+# OR from clone (dev install)
+git clone https://github.com/rapidsai/spdx-license-builder
+cd spdx-license-builder
+pip install -e .
 
 # Extract all license information
 license-builder /path/to/project --output LICENSE
@@ -52,6 +57,8 @@ When a LICENSE file is recognized, it's automatically grouped with SPDX entries 
 
 ## Usage
 
+### Basic Commands
+
 ```bash
 # Basic usage
 license-builder /path/to/project --output LICENSE
@@ -60,6 +67,37 @@ license-builder /path/to/project --output LICENSE
 license-builder /path/to/project1 /path/to/project2 --output LICENSE
 ```
 
+### Excluding Directories
+
+By default, these directories are automatically excluded: `.git`, `.github`, `dist`, `_build`, `node_modules`, `venv`, `.venv`
+
+You can add additional directories to exclude:
+
+```bash
+# Exclude build directories
+license-builder /path/to/project --exclude-dirs build _skbuild
+
+# Exclude multiple custom directories
+license-builder /path/to/project --exclude-dirs build _skbuild .tox __pycache__
+```
+
+### Performance: Parallel Processing
+
+Parallel processing is **enabled by default** for **2-4x faster scanning**:
+
+```bash
+# Default: parallel processing enabled
+license-builder /path/to/project --output LICENSE
+
+# Specify number of worker threads for very large projects
+license-builder /path/to/project --max-workers 8 --output LICENSE
+
+# Disable if needed (automatically disabled when debugging)
+license-builder /path/to/project --no-parallel --output LICENSE
+
+# Output in JSON format for programmatic use
+license-builder /path/to/project --json --output licenses.json
+```
 
 ---
 
@@ -67,7 +105,58 @@ license-builder /path/to/project1 /path/to/project2 --output LICENSE
 
 The tool produces a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers and LICENSE files. Beneath the license identifier header, files are grouped by their copyright statements, showing all file locations that share the same copyright holder and year range.
 
+### JSON Output Format
 
+Export license information in JSON format for programmatic processing:
+
+```bash
+# Output to file
+license-builder /path/to/project --json --output licenses.json
+
+# Output to stdout
+license-builder /path/to/project --json
+```
+
+**JSON Structure:**
+
+```json
+{
+  "licenses": [
+    {
+      "license_id": "Apache-2.0",
+      "spdx_files": [
+        {
+          "filename": "example.cpp",
+          "paths": [{"project": "myproject", "path": "src/example.cpp"}],
+          "copyrights": [{"year_range": "2023-2024", "owner": "Example Corp"}]
+        }
+      ],
+      "license_files": [
+        {
+          "project": "myproject",
+          "path": "third_party/lib/LICENSE",
+          "copyrights": [{"year_range": "2020-2023", "owner": "Library Authors"}]
+        }
+      ],
+      "license_text": "Apache License\nVersion 2.0...",
+      "in_project_license": true,
+      "validation_warnings": []
+    }
+  ],
+  "summary": {
+    "total_licenses": 3,
+    "license_ids": ["Apache-2.0", "MIT", "BSD-3-Clause"]
+  }
+}
+```
+
+**Key Features:**
+- **Separated Copyright and Path Information**: Copyrights are in dedicated lists
+- **Validation Status**: Includes `in_project_license` and `validation_warnings`
+- **Full License Texts**: Complete license text for each license
+- **Summary Statistics**: Overview of total licenses and IDs
+
+### Text Output Format
 
 ### Example 1: License from SPDX Headers Only
 
@@ -214,60 +303,54 @@ Full License Text:
 
 ### Example 5: Aggregate License Files
 
-Aggregate LICENSE files containing multiple distinct licenses (like [NVIDIA CCCL](https://github.com/NVIDIA/cccl/blob/main/LICENSE)) are automatically detected and given unique identifiers based on their location:
+Aggregate LICENSE files containing multiple distinct licenses (like [NVIDIA CCCL](https://github.com/NVIDIA/cccl/blob/main/LICENSE)) are **automatically decomposed** into their constituent licenses:
 
 ```
 ================================================================================
-License: Composite license from myproject/cpp/third_party/cccl/LICENSE
+License: Apache-2.0
 ================================================================================
 
 LICENSE files:
 
   Copyright (c) 2010-2023, NVIDIA CORPORATION
-  Copyright (c) 2009-2019, by the contributors listed in CREDITS.TXT
+    myproject: cpp/third_party/cccl/LICENSE
+
+Full License Text:
+
+                                Apache License
+                           Version 2.0, January 2004
+  ...
+
+================================================================================
+License: MIT
+================================================================================
+
+LICENSE files:
+
   Copyright (c) 2009-2014, MIT contributors
     myproject: cpp/third_party/cccl/LICENSE
 
 Full License Text:
 
-  ==============================================================================
-  Thrust is under the Apache Licence v2.0, with some specific exceptions
-  libcu++ is under the Apache License v2.0 with LLVM Exceptions:
-  ==============================================================================
-                                Apache License
-                           Version 2.0, January 2004
-  ...
-
-  ==============================================================================
-  Legacy LLVM License:
-  ==============================================================================
-  University of Illinois/NCSA
-  Open Source License
-  ...
-
-  ==============================================================================
-  MIT License
-  ==============================================================================
   Permission is hereby granted, free of charge...
   ...
 
-  (full aggregate license text showing all component licenses)
+================================================================================
+License: BSD-3-Clause
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2009-2019, by the contributors listed in CREDITS.TXT
+    myproject: cpp/third_party/cccl/LICENSE
+
+Full License Text:
+
+  Redistribution and use in source and binary forms...
+  ...
 ```
 
-**Note:** Each aggregate license file gets a unique identifier based on its path, ensuring that different composite licenses from different dependencies remain distinct in the report.
-
----
-
-## Installation
-
-```bash
-pip install git+https://github.com/rapidsai/spdx-license-builder.git
-
-# OR from clone (dev install)
-git clone https://github.com/rapidsai/spdx-license-builder
-cd spdx-license-builder
-pip install -e .
-```
+**Note:** The tool extracts each individual license from aggregate LICENSE files and associates the file with each constituent license. This enables proper validation when source files declare specific licenses (e.g., `SPDX-License-Identifier: MIT`) that are part of an aggregate LICENSE.
 
 ---
 
@@ -289,6 +372,14 @@ report = builder.build()
 # Write to file
 with open("LICENSE", "w") as f:
     report.write(f)
+
+# Exclude additional directories
+builder = LicenseReportBuilder(
+    project_paths=[Path("/path/to/project")],
+    with_licenses=True,
+    additional_exclude_dirs=("build", "_skbuild"),  # Add to default exclusions
+    verbose=True,
+)
 
 # Access data programmatically
 for entry in report.spdx_entries:

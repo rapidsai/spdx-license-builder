@@ -41,6 +41,9 @@ Examples:
 
   # Multiple projects
   license-builder /path/to/project1 /path/to/project2 --output LICENSE
+
+  # Exclude additional directories (adds to defaults)
+  license-builder /path/to/project --exclude-dirs build _skbuild
 """,
     )
 
@@ -78,6 +81,35 @@ Examples:
         "--no-license-text",
         action="store_true",
         help="Exclude full license text for SPDX entries (enabled by default)",
+    )
+
+    # Exclusion options
+    parser.add_argument(
+        "--exclude-dirs",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Additional directories to exclude (adds to default exclusions: .git, .github, dist, _build, node_modules, venv, .venv)",
+    )
+
+    # Performance options
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel processing (enabled by default, auto-disabled in debugger)",
+    )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Maximum number of worker threads for parallel processing (default: number of CPUs)",
+    )
+
+    # Output format options
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results in JSON format instead of text",
     )
 
     args = parser.parse_args()
@@ -119,10 +151,18 @@ def _run_license_builder(args) -> None:
         print("Mode: Extracting LICENSE files only (--no-extract)", file=sys.stderr)
 
     # Build the report using LicenseReportBuilder
+    additional_exclude_dirs = tuple(args.exclude_dirs) if args.exclude_dirs else None
+
+    # Determine parallel mode: None = auto-detect, False = explicitly disabled
+    parallel = None if not args.no_parallel else False
+
     builder = LicenseReportBuilder(
         project_paths=project_paths,
         with_licenses=not args.no_license_text,  # Enabled by default
+        additional_exclude_dirs=additional_exclude_dirs,
         verbose=True,
+        parallel=parallel,
+        max_workers=args.max_workers,
     )
 
     report = builder.build()
@@ -147,11 +187,21 @@ def _run_license_builder(args) -> None:
         filtered_report = report
 
     # Write output
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            filtered_report.write(f)
+    if args.json:
+        # JSON output
+        json_output = filtered_report.to_json(indent=2)
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(json_output)
+        else:
+            print(json_output)
     else:
-        filtered_report.write(sys.stdout)
+        # Text output
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                filtered_report.write(f)
+        else:
+            filtered_report.write(sys.stdout)
 
 
 if __name__ == "__main__":

@@ -284,3 +284,264 @@ class TestExtractorEdgeCases:
 
         # Should work with multiple paths
         assert isinstance(file_map, dict)
+
+
+class TestLicenseValidation:
+    """Test license validation against project LICENSE files."""
+
+    def test_validation_with_matching_license(self, tmp_path):
+        """Test validation when file license matches project LICENSE."""
+        # Create project LICENSE with BSD-3-Clause
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text(
+            """
+        BSD-3-Clause License
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name of the
+        copyright holder may be used to endorse or promote products...
+        """
+        )
+
+        # Create source file with matching SPDX header
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        source_file = src_dir / "test.cpp"
+        source_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Test Corp
+        // SPDX-License-Identifier: BSD-3-Clause
+
+        int main() { return 0; }
+        """
+        )
+
+        # Build report with validation
+        builder = LicenseReportBuilder(
+            project_paths=[tmp_path],
+            verbose=False,
+        )
+        report = builder.build()
+
+        # Find the BSD-3-Clause entry
+        bsd_entry = None
+        for entry in report.unified_entries:
+            if "BSD-3-Clause" in entry.license_id:
+                bsd_entry = entry
+                break
+
+        assert bsd_entry is not None
+        assert bsd_entry.in_project_license is True
+        assert len(bsd_entry.validation_warnings) == 0
+
+    def test_validation_with_missing_license(self, tmp_path):
+        """Test validation when file license is NOT in project LICENSE."""
+        # Create project LICENSE with only Apache-2.0
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text(
+            """
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+        """
+        )
+
+        # Create source file with BSD-3-Clause (not in project LICENSE)
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        source_file = src_dir / "test.cpp"
+        source_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Test Corp
+        // SPDX-License-Identifier: BSD-3-Clause
+
+        int main() { return 0; }
+        """
+        )
+
+        # Build report with validation
+        builder = LicenseReportBuilder(
+            project_paths=[tmp_path],
+            verbose=False,
+        )
+        report = builder.build()
+
+        # Find the BSD-3-Clause entry
+        bsd_entry = None
+        for entry in report.unified_entries:
+            if "BSD-3-Clause" in entry.license_id:
+                bsd_entry = entry
+                break
+
+        assert bsd_entry is not None
+        assert bsd_entry.in_project_license is False
+        assert len(bsd_entry.validation_warnings) > 0
+        assert "not found in project LICENSE" in bsd_entry.validation_warnings[0]
+
+    def test_validation_with_aggregate_license(self, tmp_path):
+        """Test validation when project LICENSE has multiple licenses."""
+        # Create aggregate project LICENSE
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text(
+            """
+        This project uses multiple licenses:
+
+        ==============================================================================
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        ==============================================================================
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+
+        ==============================================================================
+        BSD-3-Clause
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name may be used
+        to endorse or promote products...
+        """
+        )
+
+        # Create source files with different licenses
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+
+        bsd_file = src_dir / "bsd_code.cpp"
+        bsd_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Test Corp
+        // SPDX-License-Identifier: BSD-3-Clause
+        int main() { return 0; }
+        """
+        )
+
+        mit_file = src_dir / "mit_code.cpp"
+        mit_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Other Corp
+        // SPDX-License-Identifier: MIT
+        void foo() {}
+        """
+        )
+
+        # Build report with validation
+        builder = LicenseReportBuilder(
+            project_paths=[tmp_path],
+            verbose=False,
+        )
+        report = builder.build()
+
+        # Both licenses should be validated successfully
+        for entry in report.unified_entries:
+            if entry.spdx_files and (
+                "BSD-3-Clause" in entry.license_id or "MIT" in entry.license_id
+            ):  # Only check SPDX entries
+                assert entry.in_project_license is True
+                assert len(entry.validation_warnings) == 0
+
+    def test_no_validation_without_project_license(self, tmp_path):
+        """Test that validation is skipped when no project LICENSE exists."""
+        # No project LICENSE file
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        source_file = src_dir / "test.cpp"
+        source_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Test Corp
+        // SPDX-License-Identifier: BSD-3-Clause
+        int main() { return 0; }
+        """
+        )
+
+        # Build report
+        builder = LicenseReportBuilder(
+            project_paths=[tmp_path],
+            verbose=False,
+        )
+        report = builder.build()
+
+        # Validation should be skipped (in_project_license should be None)
+        for entry in report.unified_entries:
+            if entry.spdx_files:
+                assert entry.in_project_license is None
+
+    def test_compound_license_validation(self, tmp_path):
+        """Test validation of compound licenses (e.g., Apache-2.0 AND MIT)."""
+        # Create project LICENSE with both Apache and MIT
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text(
+            """
+        Apache License
+        Version 2.0, January 2004
+
+        MIT License
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+        """
+        )
+
+        # Create source file with compound license
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        source_file = src_dir / "test.cpp"
+        source_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Test Corp
+        // SPDX-License-Identifier: Apache-2.0 AND MIT
+        int main() { return 0; }
+        """
+        )
+
+        # Build report
+        builder = LicenseReportBuilder(
+            project_paths=[tmp_path],
+            verbose=False,
+        )
+        report = builder.build()
+
+        # Find compound license entry
+        for entry in report.unified_entries:
+            if "AND" in entry.license_id:
+                assert entry.in_project_license is True
+                assert len(entry.validation_warnings) == 0
+
+    def test_partial_compound_license_mismatch(self, tmp_path):
+        """Test validation when only part of compound license is in project LICENSE."""
+        # Create project LICENSE with only Apache
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text(
+            """
+        Apache License
+        Version 2.0, January 2004
+        """
+        )
+
+        # Create source file with compound license (Apache AND MIT)
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        source_file = src_dir / "test.cpp"
+        source_file.write_text(
+            """
+        // SPDX-FileCopyrightText: Copyright (c) 2023, Test Corp
+        // SPDX-License-Identifier: Apache-2.0 AND MIT
+        int main() { return 0; }
+        """
+        )
+
+        # Build report
+        builder = LicenseReportBuilder(
+            project_paths=[tmp_path],
+            verbose=False,
+        )
+        report = builder.build()
+
+        # Find compound license entry - should fail validation
+        for entry in report.unified_entries:
+            if "AND" in entry.license_id and entry.spdx_files:
+                assert entry.in_project_license is False
+                assert len(entry.validation_warnings) > 0
+                assert "MIT" in entry.validation_warnings[0]  # MIT is the missing component

@@ -11,7 +11,9 @@ Tests for utility functions.
 from spdx_license_builder.extractors import SpdxExtractor
 from spdx_license_builder.utility import (
     detect_license_type,
+    extract_all_licenses,
     extract_copyright_from_license_text,
+    find_project_license_file,
     get_license_text,
     get_project_relative_path,
 )
@@ -727,3 +729,192 @@ Permission is hereby granted..."""
         copyrights = extract_copyright_from_license_text(license_text)
         # These should be rejected as invalid year formats
         assert len(copyrights) == 0
+
+
+class TestExtractAllLicenses:
+    """Test extracting all licenses from aggregate license files."""
+
+    def test_extract_single_apache(self):
+        """Test extraction of single Apache license."""
+        license_text = """
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+        """
+        result = extract_all_licenses(license_text)
+        assert result == ["Apache-2.0"]
+
+    def test_extract_single_mit(self):
+        """Test extraction of single MIT license."""
+        license_text = """
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+        """
+        result = extract_all_licenses(license_text)
+        assert result == ["MIT"]
+
+    def test_extract_apache_and_mit(self):
+        """Test extraction of Apache and MIT from aggregate file."""
+        license_text = """
+        ==============================================================================
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+        ==============================================================================
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+        """
+        result = extract_all_licenses(license_text)
+        assert len(result) == 2
+        assert "Apache-2.0" in result
+        assert "MIT" in result
+
+    def test_extract_multiple_licenses(self):
+        """Test extraction of 3+ licenses."""
+        license_text = """
+        Apache License
+        Version 2.0, January 2004
+
+        MIT License
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name of the
+        copyright holder may be used to endorse or promote products...
+        """
+        result = extract_all_licenses(license_text)
+        assert len(result) == 3
+        assert "Apache-2.0" in result
+        assert "MIT" in result
+        assert "BSD-3-Clause" in result
+
+    def test_extract_no_licenses(self):
+        """Test extraction from unrecognized content."""
+        license_text = """
+        This is a custom proprietary license that doesn't match any patterns.
+        """
+        result = extract_all_licenses(license_text)
+        assert result == []
+
+    def test_bsd_variants_handled_correctly(self):
+        """Test that BSD-2 and BSD-3 are not double-counted."""
+        # BSD-3 pattern often matches BSD-2 text, should only return BSD-3
+        license_text = """
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name of the
+        copyright holder may be used to endorse or promote products...
+        """
+        result = extract_all_licenses(license_text)
+        assert "BSD-3-Clause" in result
+        # Should not also include BSD-2-Clause
+        assert "BSD-2-Clause" not in result
+
+
+class TestFindProjectLicenseFile:
+    """Test finding and parsing project LICENSE files."""
+
+    def test_find_license_file(self, tmp_path):
+        """Test finding a LICENSE file at project root."""
+        license_file = tmp_path / "LICENSE"
+        license_content = """
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+        """
+        license_file.write_text(license_content)
+
+        result = find_project_license_file(tmp_path)
+        assert result is not None
+        path, content, licenses = result
+        assert path == license_file
+        assert "Apache License" in content
+        assert "Apache-2.0" in licenses
+
+    def test_find_copying_file(self, tmp_path):
+        """Test finding a COPYING file when LICENSE doesn't exist."""
+        copying_file = tmp_path / "COPYING"
+        license_content = """
+        MIT License
+
+        Permission is hereby granted, free of charge...to deal in the Software without restriction
+        """
+        copying_file.write_text(license_content)
+
+        result = find_project_license_file(tmp_path)
+        assert result is not None
+        path, content, licenses = result
+        assert path == copying_file
+        assert "MIT" in licenses
+
+    def test_no_license_file(self, tmp_path):
+        """Test when no LICENSE file exists."""
+        result = find_project_license_file(tmp_path)
+        assert result is None
+
+    def test_priority_order(self, tmp_path):
+        """Test that LICENSE is preferred over COPYING."""
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text("Apache License\nVersion 2.0, January 2004\n")
+
+        copying_file = tmp_path / "COPYING"
+        copying_file.write_text(
+            "MIT License\nPermission is hereby granted...to deal in the Software without restriction\n"
+        )
+
+        result = find_project_license_file(tmp_path)
+        assert result is not None
+        path, _content, licenses = result
+        # Should pick LICENSE over COPYING
+        assert path == license_file
+        assert "Apache-2.0" in licenses
+
+    def test_aggregate_license_file(self, tmp_path):
+        """Test parsing aggregate license file with multiple licenses."""
+        license_file = tmp_path / "LICENSE"
+        license_content = """
+        ==============================================================================
+        Apache License
+        Version 2.0, January 2004
+        http://www.apache.org/licenses/
+
+        ==============================================================================
+        MIT License
+
+        Permission is hereby granted, free of charge, to any person obtaining
+        a copy of this software to deal in the Software without restriction...
+
+        ==============================================================================
+        BSD-3-Clause
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that neither the name may be used
+        to endorse or promote products...
+        """
+        license_file.write_text(license_content)
+
+        result = find_project_license_file(tmp_path)
+        assert result is not None
+        _path, _content, licenses = result
+        assert len(licenses) == 3
+        assert "Apache-2.0" in licenses
+        assert "MIT" in licenses
+        assert "BSD-3-Clause" in licenses
+
+    def test_unrecognized_license_file(self, tmp_path):
+        """Test handling of unrecognized license content."""
+        license_file = tmp_path / "LICENSE"
+        license_file.write_text("Custom proprietary license with no known patterns.")
+
+        result = find_project_license_file(tmp_path)
+        assert result is not None
+        _path, _content, licenses = result
+        # Should return empty list when no licenses are recognized
+        assert licenses == []
