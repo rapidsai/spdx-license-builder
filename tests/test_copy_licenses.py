@@ -470,7 +470,8 @@ class TestLicenseDetectionIntegration:
         # Create MIT LICENSE file
         license_dir = tmp_path / "mit_lib"
         license_dir.mkdir()
-        (license_dir / "LICENSE").write_text("""MIT License
+        (license_dir / "LICENSE").write_text(
+            """MIT License
 
 Copyright (c) 2020 Example Corp
 
@@ -479,7 +480,8 @@ a copy of this software and associated documentation files (the
 "Software"), to deal in the Software without restriction, including
 without limitation the rights to use, copy, modify, merge, publish,
 distribute, sublicense, and/or sell copies of the Software.
-""")
+"""
+        )
 
         extractor = DependencyLicenseExtractor([tmp_path])
         dep_licenses = extractor.extract()
@@ -496,14 +498,16 @@ distribute, sublicense, and/or sell copies of the Software.
         # Create Apache LICENSE file
         license_dir = tmp_path / "apache_lib"
         license_dir.mkdir()
-        (license_dir / "LICENSE").write_text("""Apache License
+        (license_dir / "LICENSE").write_text(
+            """Apache License
 Version 2.0, January 2004
 http://www.apache.org/licenses/
 
 Copyright (c) 2020-2023, Example Corporation.
 
 Licensed under the Apache License, Version 2.0 (the "License");
-""")
+"""
+        )
 
         extractor = DependencyLicenseExtractor([tmp_path])
         dep_licenses = extractor.extract()
@@ -540,16 +544,19 @@ Licensed under the Apache License, Version 2.0 (the "License");
         # Create SPDX-tagged MIT file
         src_dir = tmp_path / "src"
         src_dir.mkdir()
-        (src_dir / "main.cpp").write_text("""// SPDX-FileCopyrightText: Copyright (c) 2023 Example
+        (src_dir / "main.cpp").write_text(
+            """// SPDX-FileCopyrightText: Copyright (c) 2023 Example
 // SPDX-License-Identifier: MIT
 
 #include <iostream>
-""")
+"""
+        )
 
         # Create MIT LICENSE file
         dep_dir = tmp_path / "third_party" / "mit_lib"
         dep_dir.mkdir(parents=True)
-        (dep_dir / "LICENSE").write_text("""MIT License
+        (dep_dir / "LICENSE").write_text(
+            """MIT License
 
 Copyright (c) 2020 Third Party
 
@@ -558,7 +565,8 @@ a copy of this software and associated documentation files (the
 "Software"), to deal in the Software without restriction, including
 without limitation the rights to use, copy, modify, merge, publish,
 distribute, sublicense, and/or sell copies of the Software.
-""")
+"""
+        )
 
         builder = LicenseReportBuilder(
             project_paths=[tmp_path],
