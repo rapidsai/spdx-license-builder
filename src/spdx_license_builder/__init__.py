@@ -21,18 +21,6 @@ except importlib.metadata.PackageNotFoundError:
     _version_file = Path(__file__).parent.parent.parent / "VERSION"
     __version__ = _version_file.read_text().strip()
 
-from .deduplication import (
-    compute_normalized_hash,
-    find_parent_licenses_with_same_content,
-    get_directory_depth,
-    group_licenses_with_deduplication,
-    is_nvidia_project,
-    is_parent_path,
-    is_rapids_project,
-    normalize_copyright_years,
-    should_deduplicate_rapids_license,
-    should_prefer_parent_license,
-)
 from .extractors import (
     DependencyLicenseExtractor,
     LicenseExtractor,
@@ -62,17 +50,6 @@ __all__ = [
     "walk_directories_for_files",
     "detect_license_type",
     "extract_copyright_from_license_text",
-    # Deduplication functions
-    "normalize_copyright_years",
-    "compute_normalized_hash",
-    "is_rapids_project",
-    "is_nvidia_project",
-    "is_parent_path",
-    "get_directory_depth",
-    "should_deduplicate_rapids_license",
-    "should_prefer_parent_license",
-    "find_parent_licenses_with_same_content",
-    "group_licenses_with_deduplication",
     # OOP classes - Extractors
     "LicenseExtractor",
     "SpdxExtractor",
