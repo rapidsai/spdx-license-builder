@@ -82,11 +82,10 @@ License: Apache-2.0 AND MIT
 
 Files with SPDX headers:
 
-  Select.cuh:
-    Copyright (c) 2019-2023, Facebook, Inc. and its affiliates
-      cudf: cpp/include/cudf/detail/utilities/Select.cuh
-      cuml: cpp/src/neighbors/Select.cuh
-      raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
+  Copyright (c) 2019-2023, Facebook, Inc. and its affiliates
+    cudf: cpp/include/cudf/detail/utilities/Select.cuh
+    cuml: cpp/src/neighbors/Select.cuh
+    raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
 
 Full License Text:
 
@@ -120,9 +119,8 @@ License: BSD-3-Clause
 
 Files with SPDX headers:
 
-  bsd_file.h:
-    Copyright (c) 2020-2023, Example Corporation
-      myproject: cpp/include/bsd_file.h
+  Copyright (c) 2020-2023, Example Corporation
+    myproject: cpp/include/bsd_file.h
 
 LICENSE files:
 
@@ -153,9 +151,8 @@ License: MIT
 
 Files with SPDX headers:
 
-  utils.cpp:
-    Copyright (c) 2023, My Company
-      myproject: cpp/src/utils.cpp
+  Copyright (c) 2023, My Company
+    myproject: cpp/src/utils.cpp
 
 LICENSE files:
 

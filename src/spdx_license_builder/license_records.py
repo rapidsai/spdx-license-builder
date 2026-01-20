@@ -189,23 +189,37 @@ class UnifiedLicenseEntry:
             print("Files with SPDX headers:", file=out)
             print(file=out)
 
-            for filename in sorted(self.spdx_files.keys()):
+            # Group files by their copyright
+            copyright_to_files = {}
+            for filename in self.spdx_files:
                 file_info = self.spdx_files[filename]
-                print(f"  {filename}:", file=out)
+                copyrights = file_info.get("copyrights", [])
+                locations = file_info.get("locations", {})
 
-                # Show copyrights first (4 spaces - less indented)
-                if "copyrights" in file_info:
-                    for year_range, owner in sorted(file_info["copyrights"]):
+                # Use copyright tuple as key
+                copyright_key = tuple(sorted(copyrights)) if copyrights else ()
+
+                if copyright_key not in copyright_to_files:
+                    copyright_to_files[copyright_key] = []
+
+                # Store all locations for this file
+                for project in sorted(locations.keys()):
+                    for path in sorted(locations[project]):
+                        copyright_to_files[copyright_key].append((project, path))
+
+            # Display grouped by copyright
+            for copyright_key, file_paths in sorted(copyright_to_files.items()):
+                # Show copyright first
+                if copyright_key:
+                    for year_range, owner in copyright_key:
                         if year_range:
-                            print(f"    Copyright (c) {year_range}, {owner}", file=out)
+                            print(f"  Copyright (c) {year_range}, {owner}", file=out)
                         else:
-                            print(f"    Copyright (c) {owner}", file=out)
+                            print(f"  Copyright (c) {owner}", file=out)
 
-                # Show locations as children of copyrights (6 spaces - more indented)
-                if "locations" in file_info:
-                    for project in sorted(file_info["locations"].keys()):
-                        for path in sorted(file_info["locations"][project]):
-                            print(f"      {project}: {path}", file=out)
+                # Show all file paths under this copyright
+                for project, path in sorted(file_paths):
+                    print(f"    {project}: {path}", file=out)
                 print(file=out)
 
         # Section 2: LICENSE files
