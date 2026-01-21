@@ -21,30 +21,45 @@ except importlib.metadata.PackageNotFoundError:
     _version_file = Path(__file__).parent.parent.parent / "VERSION"
     __version__ = _version_file.read_text().strip()
 
-from .deduplication import (
-    compute_normalized_hash,
-    group_licenses_with_deduplication,
-    is_cccl_component,
-    is_cccl_root,
-    is_nvidia_project,
-    is_rapids_project,
-    normalize_copyright_years,
-    should_deduplicate_rapids_license,
-    should_skip_cccl_component_license,
+from .extractors import (
+    DependencyLicenseExtractor,
+    LicenseExtractor,
+    LicenseReportBuilder,
+    SpdxExtractor,
 )
-from .utility import get_license_text, get_project_relative_path, walk_directories_for_files
+from .license_records import (
+    CopyrightInfo,
+    DependencyLicense,
+    LicenseReport,
+    LicenseText,
+    SpdxCopyright,
+    SpdxEntry,
+)
+from .utility import (
+    detect_license_type,
+    extract_copyright_from_license_text,
+    get_license_text,
+    get_project_relative_path,
+    walk_directories_for_files,
+)
 
 __all__ = [
+    # Utility functions
     "get_project_relative_path",
     "get_license_text",
     "walk_directories_for_files",
-    "normalize_copyright_years",
-    "compute_normalized_hash",
-    "is_rapids_project",
-    "is_nvidia_project",
-    "is_cccl_component",
-    "is_cccl_root",
-    "should_deduplicate_rapids_license",
-    "should_skip_cccl_component_license",
-    "group_licenses_with_deduplication",
+    "detect_license_type",
+    "extract_copyright_from_license_text",
+    # OOP classes - Extractors
+    "LicenseExtractor",
+    "SpdxExtractor",
+    "DependencyLicenseExtractor",
+    "LicenseReportBuilder",
+    # OOP classes - Data records
+    "SpdxEntry",
+    "LicenseText",
+    "DependencyLicense",
+    "LicenseReport",
+    "CopyrightInfo",
+    "SpdxCopyright",
 ]

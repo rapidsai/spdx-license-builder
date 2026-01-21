@@ -43,6 +43,59 @@ conduct. More information can be found at:
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
 
+### Development Workflow
+
+#### Setting up pre-commit hooks
+
+This project uses pre-commit hooks to ensure code quality. Install them with:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+The hooks will automatically run on each commit and will:
+- Lint and fix code with `ruff check --fix` (on `src/` and `tests/`)
+- Format code with `ruff format` (on `src/` and `tests/`)
+- Run tests with `pytest`
+
+**Note:** The pre-commit hooks are configured to match exactly what CI checks, so if pre-commit passes, CI will pass too.
+
+To run pre-commit on all files manually:
+
+```bash
+pre-commit run --all-files
+```
+
+To skip a specific hook (e.g., when testing):
+
+```bash
+SKIP=pytest-check git commit -m "message"
+```
+
+#### Manual code quality checks
+
+If you want to run the checks manually:
+
+```bash
+# Lint and auto-fix issues
+ruff check --fix src/ tests/
+
+# Format code
+ruff format src/ tests/
+
+# Check formatting without changing files
+ruff format --check src/ tests/
+
+# Run tests
+pytest tests/ -n auto
+
+# Run tests with coverage
+pytest tests/ -n auto --cov=spdx_license_builder --cov-report=term-missing
+```
+
+**Note:** The CI pipeline runs the same checks as pre-commit but in check-only mode (won't auto-fix). Make sure to run pre-commit or the manual commands above before pushing to ensure CI passes.
+
 #### Signing Your Work
 
 * We require that all contributors "sign-off" on their commits. This certifies that the contribution is your original work, or you have rights to submit it under the same license, or a compatible license.

@@ -19,11 +19,16 @@ ENV/
 .venv
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# VSCode - keep configs, ignore generated files
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/README.md
 
 # Testing
 .ruff_cache/
@@ -35,3 +40,11 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Debug output files
+cuvs_LICENSE.txt
+cuvs_SPDX_only.txt
+cuvs_LICENSE_files_only.txt
+test_LICENSE.txt
+example_license_report.txt
+*_LICENSE.txt

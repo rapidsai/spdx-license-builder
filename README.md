@@ -1,175 +1,391 @@
-# License Builder Tools
+# License Builder
 
-This repository contains tools for extracting and managing license information from RAPIDS projects.
+Extract and manage license information from projects using SPDX headers and LICENSE files.
 
-## Overview
+## Quick Start
 
-The `license-builder` tool provides two main commands:
+```bash
+# Install
+pip install git+https://github.com/rapidsai/spdx-license-builder.git
 
-### 1. `license-builder extract` - SPDX Copyright Extractor
+# OR from clone (dev install)
+git clone https://github.com/rapidsai/spdx-license-builder
+cd spdx-license-builder
+pip install -e .
 
-Extracts third-party copyright and license information from source code files by parsing SPDX headers.
-Since RAPIDS build directories are under `cpp/` this can be used to extract dependencies SPDX copyright details as well/
+# Extract all license information (outputs to stdout)
+license-builder /path/to/project
 
-**What it does:**
-- Scans entire project directory for SPDX copyright tags (`SPDX-FileCopyrightText` and `SPDX-License-Identifier`)
-- Extracts non-NVIDIA third-party copyright information
-- Optionally includes full license texts (fetched from local cache or SPDX API)
-- Excludes common non-source directories (build/, test/, .git/, etc.)
-
-
-### License Caching
-
-License texts are cached in two locations:
-
-- **Bundled licenses** - Common licenses (Apache-2.0, MIT, BSD-3-Clause) are bundled with the package
-- **`infrequent_licenses/`** - Dynamically fetched licenses (auto-created in current directory)
-
-When a license is not found in the bundled cache, it's automatically fetched from `http://spdx.org/licenses/[licenseID].json` and cached in `infrequent_licenses/` for future use.
+# Save to file
+license-builder /path/to/project --output-json LICENSE.json --output-txt LICENSE.txt
+```
 
 ---
 
+## Overview
 
-**Usage:**
+The `license-builder` tool extracts license information using two complementary methods:
 
-After installation, use the unified command-line tool:
+### 1. **SPDX Copyright Extraction**
+
+Scans source files for SPDX headers to find `SPDX-FileCopyrightText` and
+`SPDX-License-Identifier` tags in third-party code.
+
+### 2. **LICENSE File Copying**
+
+Finds standalone LICENSE files in dependencies:
+- Searches for common license file patterns (LICENSE, COPYING, COPYRIGHT, NOTICE)
+- Includes build directories where dependencies are typically located
+- Reads full license text from each file
+- **Automatically detects** license type from content and groups with SPDX entries
+
+When a LICENSE file is recognized, it's automatically grouped with SPDX entries of the same license type for unified reporting.
+
+## **Output**
+
+You can generate up to **two output files** in one run:
+
+1. **User-Friendly** (`--output-txt`): Text format with NVIDIA Apache-2.0 header, then third-party licenses with NVIDIA copyrights filtered
+2. **Machine-Friendly** (`--output-json`): **JSON format** with complete listing of all licenses explicitly, including all NVIDIA copyrights
+
 ```bash
-license-builder extract [PROJECT_PATH...] [--with-licenses]
+# Generate both outputs
+license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LICENSE.txt
 ```
 
-**Examples:**
+**User-Friendly Format (`--output-txt`, Text):**
+- Starts with NVIDIA Copyright and Apache-2.0 license, then shows other third
+  party licenses below.
+- Uses indentation to group hierarchically: license type, then copyright, then
+  files that have that copyright group
+- Intended to highlight third-party licenses. NVIDIA copyrights filtered from
+  this view. Read this as "everything but the NVIDIA licensed content." The
+  top-level Apache2 license implicitly applies to any unlisted file.
+- Does not list files that have only an NVIDIA copyright entry
+
+**Machine-Friendly Format (`--output-json`, JSON):**
+- All copyrights included (NVIDIA + third-party)
+- All files that include copyright information are included
+- Machine-parsable for automation and compliance tools
+
+---
+
+### Output Examples
+
+Both outputs produce a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers and LICENSE files. Beneath the license identifier header, files are grouped by their copyright statements, showing all file locations that share the same copyright holder(s) and year range.
+
+#### JSON Output Format
+
+Export license information in JSON format for programmatic processing:
+
 ```bash
-# Scan a single project
-license-builder extract /path/to/project
-
-# Add full license texts and write to a file
-license-builder extract /path/to/project --with-licenses --output third_party_licenses.txt
-
-# Scan multiple projects
-license-builder extract /path/to/project1 /path/to/project2 --with-licenses
+# Output to file
+license-builder /path/to/project --output-json licenses.json
 ```
 
-**Alternative usage:**
-```bash
-# Run as Python module
-python -m spdx_license_builder extract /path/to/project --with-licenses
+**JSON Structure:**
+
+```json
+{
+  "licenses": [
+    {
+      "license_id": "Apache-2.0",
+      "spdx_files": [
+        {
+          "filename": "example.cpp",
+          "paths": [{"project": "myproject", "path": "src/example.cpp"}],
+          "copyrights": [{"year_range": "2023-2024", "owner": "Example Corp"}]
+        }
+      ],
+      "license_files": [
+        {
+          "project": "myproject",
+          "path": "third_party/lib/LICENSE",
+          "copyrights": [{"year_range": "2020-2023", "owner": "Library Authors"}]
+        }
+      ],
+      "license_text": "Apache License\nVersion 2.0...",
+      "in_project_license": true,
+      "validation_warnings": []
+    }
+  ],
+  "summary": {
+    "total_licenses": 3,
+    "license_ids": ["Apache-2.0", "MIT", "BSD-3-Clause"]
+  }
+}
 ```
 
-**Example output:**
+#### Text Output Format
+
+##### Example 1: License from SPDX Headers Only
+
+When code includes SPDX tags, copyright info is extracted and grouped by copyright holder:
+
 ```
 ================================================================================
-Non-NVIDIA Third-Party Licenses for specific files
+License: Apache-2.0 AND MIT
 ================================================================================
 
-Files are listed with their associated licenses and copyright holders.
+Files with SPDX headers:
 
-================================================================================
-File: Select.cuh
-================================================================================
-
-  Locations:
+  Copyright (c) 2019-2023, Facebook, Inc. and its affiliates
     cudf: cpp/include/cudf/detail/utilities/Select.cuh
     cuml: cpp/src/neighbors/Select.cuh
     raft: cpp/include/raft/neighbors/detail/faiss_select/Select.cuh
 
-  License: Apache-2.0 AND MIT
+  Copyright (c) 2017-2022, Facebook, Inc. and its affiliates
+    cudf: cpp/include/cudf/detail/utilities/WarpSelect.cuh
+    raft: cpp/include/raft/neighbors/detail/faiss_select/WarpSelect.cuh
 
-    Copyright (c) 2019-2024 Facebook, Inc. and its affiliates
+  Copyright (c) 2020-2024, Meta Platforms, Inc.
+    cuml: cpp/src/distance/kernels/BlockSelect.cuh
 
+Full License Text:
 
-================================================================================
-File: bsd_file.h
-================================================================================
+  --- Apache-2.0 ---
 
-  Locations:
-    project: cpp/include/bsd_file.h
+  Apache License
+  Version 2.0, January 2004
+  http://www.apache.org/licenses/
 
-  License: BSD-3-Clause
+  TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-    Copyright (c) 2020-2023 Example Corporation
+  1. Definitions...
+  (full Apache 2.0 license text)
+
+  --- MIT ---
+
+  MIT License
+
+  Permission is hereby granted, free of charge...
+  (full MIT license text)
 ```
 
-*Note: Files with the same name from multiple projects are grouped together. Copyright dates are merged to show the full range (earliest-latest).*
+##### Example 2: License from SPDX Headers + LICENSE Files
+
+When the same license identifier appears in both sources, they are unified and
+grouped by copyright (which may include more than one copyright line):
+
+```
+================================================================================
+License: BSD-3-Clause
+================================================================================
+
+Files with SPDX headers:
+
+  Copyright (c) 2020-2023, Example Corporation
+    myproject: cpp/include/bsd_file.h
+    myproject: cpp/include/utilities/bsd_helper.h
+
+  Copyright (c) 2021, Other Developer
+    myproject: cpp/src/bsd_module.cpp
+
+LICENSE files:
+
+  Copyright (c) 2018-2022, Some BSD Library Contributors
+    myproject: cpp/third_party/some_bsd_lib/LICENSE
+
+  Copyright (c) 2015-2023, Another BSD Project
+    myproject: build/_deps/another_bsd_lib/COPYING
+
+Full License Text:
+
+  Copyright (c) <year> <owner>.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met...
+  (full BSD-3-Clause license text)
+```
+
+##### Example 3: Detected License from LICENSE File
+
+When LICENSE files contain recognizable license text, they are automatically classified and grouped with SPDX entries of the same type:
+
+```
+================================================================================
+License: MIT
+================================================================================
+
+Files with SPDX headers:
+
+  Copyright (c) 2023, My Company
+    myproject: cpp/src/utils.cpp
+    myproject: cpp/src/helpers.cpp
+
+  Copyright (c) 2022-2024, Third Party Contributor
+    myproject: cpp/include/contrib/module.h
+
+LICENSE files:
+
+  Copyright (c) 2012 - present, Victor Zverovich
+    myproject: cpp/third_party/fmt/LICENSE
+
+  Copyright (c) 2016 - 2024, Gabi Melman
+    myproject: build/_deps/spdlog/LICENSE
+
+Full License Text:
+
+  MIT License
+
+  Permission is hereby granted, free of charge, to any person obtaining
+  a copy of this software and associated documentation files (the
+  "Software"), to deal in the Software without restriction, including
+  without limitation the rights to use, copy, modify, merge, publish,
+  distribute, sublicense, and/or sell copies of the Software...
+  (full MIT license text)
+```
+
+##### Example 4: Unrecognized LICENSE Files
+
+For LICENSE files with unrecognizable or custom licenses, each is kept separate:
+
+```
+================================================================================
+License: Unrecognized license: cpp/third_party/custom_lib/LICENSE
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2024, Custom Corp. All rights reserved.
+    myproject: cpp/third_party/custom_lib/LICENSE
+
+Full License Text:
+
+  Custom License Agreement
+
+  Copyright (c) 2024, Custom Corp. All rights reserved.
+
+  This software is provided under the following terms...
+  (full custom license text)
+```
+
+##### Example 5: Aggregate License Files
+
+Aggregate LICENSE files containing multiple distinct licenses (like [NVIDIA CCCL](https://github.com/NVIDIA/cccl/blob/main/LICENSE)) are **automatically decomposed** into their constituent licenses:
+
+```
+================================================================================
+License: Apache-2.0
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2010-2023, NVIDIA CORPORATION
+    myproject: cpp/third_party/cccl/LICENSE
+
+Full License Text:
+
+                                Apache License
+                           Version 2.0, January 2004
+  ...
+
+================================================================================
+License: MIT
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2009-2014, MIT contributors
+    myproject: cpp/third_party/cccl/LICENSE
+
+Full License Text:
+
+  Permission is hereby granted, free of charge...
+  ...
+
+================================================================================
+License: BSD-3-Clause
+================================================================================
+
+LICENSE files:
+
+  Copyright (c) 2009-2019, by the contributors listed in CREDITS.TXT
+    myproject: cpp/third_party/cccl/LICENSE
+
+Full License Text:
+
+  Redistribution and use in source and binary forms...
+  ...
+```
+
+**Note:** The tool extracts each individual license from aggregate LICENSE files and associates the file with each constituent license. This enables proper validation when source files declare specific licenses (e.g., `SPDX-License-Identifier: MIT`) that are part of an aggregate LICENSE.
 
 ---
 
-### 2. `license-builder copy` - LICENSE File Extractor
+## Advanced Options
 
-Finds all LICENSE files in project directories and outputs their full contents in a formatted report.
+**Custom License References**
 
-**What it does:**
-- Searches for all files starting with "LICENSE" in `c/` and `cpp/` directories
-- Identifies which project each LICENSE file belongs to
-- Reads the full license text from each file
-- Shows all locations that share the same license text together
-- Outputs formatted report with full license texts
+The tool supports custom license references (e.g., `LicenseRef-NvidiaProprietary`) that are not part of the standard SPDX license list. These are automatically fetched from configured URLs and cached locally.
 
-**Usage:**
-
-After installation, use the unified command-line tool:
 ```bash
-license-builder copy [PROJECT_PATH...]
+# Update custom licenses from their source URLs
+license-builder-update-custom-licenses
+
+# Or use the Python module directly
+python -m spdx_license_builder.update_custom_licenses
 ```
 
-**Examples:**
+Custom licenses are configured in `src/spdx_license_builder/custom_licenses/LICENSE_URLS.json`. See the [Custom Licenses README](src/spdx_license_builder/custom_licenses/README.md) for details on adding new custom licenses.
+
+**Currently Supported Custom Licenses:**
+- `LicenseRef-NvidiaProprietary` - NVIDIA Software License Agreement
+
+**License Exceptions**
+
+The tool supports SPDX license exceptions that modify base licenses using the `WITH` keyword (e.g., `Apache-2.0 WITH LLVM-exception`). Exceptions are automatically combined with their base license text.
+
 ```bash
-# Extract LICENSE files from a single project
-license-builder copy /path/to/project
-
-# Extract from multiple projects and combine results
-license-builder copy /path/to/project1 /path/to/project2
-
-# Redirect output to a file
-license-builder copy /path/to/project --output all_licenses.txt
+# Example: A file with Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 ```
 
-**Alternative usage:**
+**Supported License Exceptions:**
+- `LLVM-exception` - LLVM exception to Apache 2.0 (see [SPDX LLVM-exception](https://spdx.org/licenses/LLVM-exception.html))
+
+The license builder automatically:
+1. Recognizes the `WITH` keyword in SPDX identifiers
+2. Fetches the base license (e.g., Apache-2.0)
+3. Appends the exception text
+4. Combines them in the output with a clear separator
+
+---
+
+## Development
+
+### Quick Start
+
 ```bash
-# Run as Python module
-python -m spdx_license_builder copy /path/to/project
+# Install with development dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks (automatically runs checks on commit)
+make pre-commit-install
+
+# Run all CI checks locally
+make ci-check
 ```
 
-**Example output:**
-```
-================================================================================
-  Locations:
-    project: cpp/third_party/fmt/LICENSE
+### Available Make Targets
 
-  License Text:
-
-    Copyright (c) 2012 - present, Victor Zverovich
-
-    Permission is hereby granted, free of charge, to any person obtaining
-    a copy of this software and associated documentation files (the
-    "Software"), to deal in the Software without restriction, including
-    without limitation the rights to use, copy, modify, merge, publish,
-    distribute, sublicense, and/or sell copies of the Software, and to
-    permit persons to whom the Software is furnished to do so, subject to
-    the following conditions:
-
-    The above copyright notice and this permission notice shall be
-    included in all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-================================================================================
+```bash
+make help              # Show all available commands
+make lint              # Run ruff linter with auto-fix
+make format            # Format code with ruff
+make format-check      # Check formatting without modifying files
+make test              # Run tests
+make test-cov          # Run tests with coverage report
+make ci-check          # Run the same checks as CI
 ```
 
-**Output format:**
-- File locations organized by project
-- Full license text from each LICENSE file
-- Automatic deduplication (identical licenses shown once with all locations)
-
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.
 
 ---
 
 ## License
 
 SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
 SPDX-License-Identifier: Apache-2.0

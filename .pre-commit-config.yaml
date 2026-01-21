@@ -31,15 +31,17 @@ repos:
 
   # Python linting and formatting with Ruff (replaces black, flake8, isort)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.14.13
     hooks:
-      # Run the linter
+      # Run the linter (matches CI: ruff check src/ tests/)
       - id: ruff
         name: Lint with ruff
         args: ['--fix', '--unsafe-fixes']
-      # Run the formatter
+        files: ^(src|tests)/.*\.py$
+      # Run the formatter (matches CI: ruff format src/ tests/)
       - id: ruff-format
         name: Format with ruff
+        files: ^(src|tests)/.*\.py$
 
   # Run tests (parallel execution for speed)
   - repo: local
@@ -51,7 +53,7 @@ repos:
         pass_filenames: false
         always_run: true
         args: ['-q', '-n', 'auto', '--tb=line']
-        stages: [commit]
+        stages: [pre-commit]
 
       - id: pytest-cov
         name: Run pytest with coverage (push only)
@@ -60,7 +62,7 @@ repos:
         pass_filenames: false
         always_run: true
         args: ['-n', 'auto', '--cov=spdx_license_builder', '--cov-report=term-missing:skip-covered', '--cov-fail-under=80']
-        stages: [push]
+        stages: [pre-push]
 
 # Global settings
 default_language_version:

@@ -11,17 +11,16 @@ license = {text = "Apache-2.0"}
 authors = [
     {name = "NVIDIA CORPORATION & AFFILIATES"}
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 keywords = ["license", "spdx", "copyright", "license-management"]
@@ -34,17 +33,14 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-xdist>=3.0",
-    "ruff>=0.8.0",
+    "ruff>=0.14.0",
     "pre-commit>=3.0",
+    "mypy>=1.0",
 ]
 
 [project.scripts]
-# Primary unified CLI
 license-builder = "spdx_license_builder.cli:main"
-
-# Legacy commands (kept for backward compatibility)
-extract-licenses-via-spdx = "spdx_license_builder.extract_licenses_via_spdx:main"
-find-and-copy-license-files = "spdx_license_builder.find_and_copy_license_files:main"
+license-builder-update-custom-licenses = "spdx_license_builder.update_custom_licenses:main"
 
 [project.urls]
 Homepage = "https://github.com/rapidsai/spdx-license-builder"
@@ -65,11 +61,20 @@ include = ["spdx_license_builder*"]
 [tool.setuptools.package-data]
 spdx_license_builder = [
     "common_licenses/*.txt",
+    "custom_licenses/*.txt",
+    "custom_licenses/*.json",
+    "custom_licenses/*.md",
+    "license_exceptions/*.txt",
+    "license_exceptions/*.md",
 ]
 
 [tool.black]
 line-length = 100
-target-version = ["py38", "py39", "py310", "py311", "py312"]
+target-version = ["py310", "py311", "py312", "py313"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

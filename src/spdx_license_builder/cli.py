@@ -5,164 +5,177 @@
 #
 
 """
-Unified command-line interface for SPDX License Builder tools.
+Command-line interface for SPDX License Builder.
 
-Provides a single entry point with subcommands:
-  license-builder extract  - Extract SPDX copyright entries
-  license-builder copy     - Find and copy LICENSE files
+Extracts license information from projects by:
+  - Scanning source files for SPDX copyright headers
+  - Finding LICENSE files in dependencies
 """
 
 import argparse
 import sys
+from pathlib import Path
+from typing import NoReturn
 
 from . import __version__
 
 
-def main():
-    """Main entry point for the unified CLI."""
+def main() -> NoReturn:
+    """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
         prog="license-builder",
-        description="Tools for extracting and managing license information from projects",
+        description="Extract and manage license information from projects",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Extract SPDX copyright entries
-  license-builder extract /path/to/project
-  license-builder extract /path/to/project --with-licenses --output third_party.txt
+  # Extract all license info (SPDX headers + LICENSE files)
+  license-builder /path/to/project --output-json licenses.json --output-txt LICENSE.txt
 
-  # Find and copy LICENSE files
-  license-builder copy /path/to/project
-  license-builder copy /path/to/project1 /path/to/project2 --output licenses.txt
+  # Multiple projects
+  license-builder /path/to/project1 /path/to/project2 --output-json licenses.json
 
-For more help on a specific command:
-  license-builder extract --help
-  license-builder copy --help
-        """,
+  # Exclude additional directories (adds to defaults)
+  license-builder /path/to/project --exclude-dirs build _skbuild
+
+  # Clear cache and rescan
+  license-builder /path/to/project --clear-cache --output-json licenses.json
+""",
     )
 
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
-    subparsers = parser.add_subparsers(
-        title="commands",
-        description="Available commands",
-        dest="command",
-        required=True,
-        help="Command to run",
-    )
-
-    # Subcommand: extract
-    extract_parser = subparsers.add_parser(
-        "extract",
-        help="Extract SPDX copyright entries from source files",
-        description="Extract non-NVIDIA third-party SPDX license information from source code.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  license-builder extract /path/to/project
-  license-builder extract /path/to/project --with-licenses --output third_party.txt
-  license-builder extract /path/to/project1 /path/to/project2 --with-licenses
-
-This command scans C/C++ source files for SPDX copyright tags and extracts
-non-NVIDIA third-party copyright information.
-        """,
-    )
-    extract_parser.add_argument(
+    # Project paths (required)
+    parser.add_argument(
         "project_path",
         type=str,
         nargs="+",
-        help="Path(s) to the project root directory/directories to scan",
+        help="Path(s) to project directory/directories to scan",
     )
-    extract_parser.add_argument(
-        "--with-licenses",
-        action="store_true",
-        help="Include full license text for each license type found",
-    )
-    extract_parser.add_argument(
-        "-o",
-        "--output",
+
+    # Output options
+    parser.add_argument(
+        "--output-json",
         type=str,
         default=None,
-        help="Write output to file instead of stdout (default: stdout)",
+        help="Output file for machine-friendly JSON format (all licenses explicitly listed)",
+    )
+    parser.add_argument(
+        "--output-txt",
+        type=str,
+        default=None,
+        help="Output file for user-friendly text format (NVIDIA header + third-party licenses)",
     )
 
-    # Subcommand: copy
-    copy_parser = subparsers.add_parser(
-        "copy",
-        help="Find and extract LICENSE files from projects",
-        description="Find all LICENSE files in project directories and output their contents.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  license-builder copy /path/to/project
-  license-builder copy /path/to/project1 /path/to/project2 --output all_licenses.txt
-  license-builder copy /path/to/project --deduplicate-rapids --handle-cccl
-
-This command searches for all files starting with "LICENSE" and outputs
-their full contents in a formatted report.
-        """,
-    )
-    copy_parser.add_argument(
-        "project_path",
+    # Exclusion options
+    parser.add_argument(
+        "--exclude-dirs",
         type=str,
         nargs="+",
-        help="Path(s) to the project root directory/directories to scan",
-    )
-    copy_parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
         default=None,
-        help="Write output to file instead of stdout (default: stdout)",
-    )
-    copy_parser.add_argument(
-        "--deduplicate-rapids",
-        action="store_true",
-        help="Deduplicate licenses from known RAPIDS/NVIDIA projects",
-    )
-    copy_parser.add_argument(
-        "--handle-cccl",
-        action="store_true",
-        help="Special handling for CCCL component licenses (skip components if root exists)",
-    )
-    copy_parser.add_argument(
-        "--normalize-years",
-        action="store_true",
-        help="Normalize copyright years for better deduplication",
+        help="Additional directories to exclude (adds to default exclusions: .git, .github, dist, _build, node_modules, venv, .venv)",
     )
 
-    # Parse arguments
+    # Performance options
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel processing (enabled by default, auto-disabled in debugger)",
+    )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Maximum number of worker threads for parallel processing (default: number of CPUs)",
+    )
+
+    # Validation options
+    parser.add_argument(
+        "--enable-validation",
+        action="store_true",
+        help="Enable license validation warnings (experimental, disabled by default)",
+    )
+
+    # Cache options
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable caching (slower but ensures fresh scan)",
+    )
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear cache before running",
+    )
+
     args = parser.parse_args()
 
-    # Route to appropriate command
-    if args.command == "extract":
-        from .extract_licenses_via_spdx import main as extract_main
-
-        # Replace sys.argv to pass arguments to the subcommand
-        sys.argv = ["extract-licenses-via-spdx"] + args.project_path
-        if args.with_licenses:
-            sys.argv.append("--with-licenses")
-        if args.output:
-            sys.argv.extend(["--output", args.output])
-        extract_main()
-
-    elif args.command == "copy":
-        from .find_and_copy_license_files import main as copy_main
-
-        # Replace sys.argv to pass arguments to the subcommand
-        sys.argv = ["find-and-copy-license-files"] + args.project_path
-        if args.output:
-            sys.argv.extend(["--output", args.output])
-        if args.deduplicate_rapids:
-            sys.argv.append("--deduplicate-rapids")
-        if args.handle_cccl:
-            sys.argv.append("--handle-cccl")
-        if args.normalize_years:
-            sys.argv.append("--normalize-years")
-        copy_main()
-
-    else:
-        parser.print_help()
+    # Run the license extraction
+    try:
+        _run_license_builder(args)
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def _run_license_builder(args) -> None:
+    """Run the license builder with given arguments."""
+    from .extractors import LicenseReportBuilder
+
+    project_paths = [Path(p) for p in args.project_path]
+
+    print(f"Project path(s): {', '.join(str(p) for p in project_paths)}", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+
+    # Build the report using LicenseReportBuilder
+    additional_exclude_dirs = tuple(args.exclude_dirs) if args.exclude_dirs else None
+
+    # Determine parallel mode: None = auto-detect, False = explicitly disabled
+    parallel = None if not args.no_parallel else False
+
+    # Handle cache options
+    use_cache = not args.no_cache
+    if args.clear_cache:
+        from .cache import ExtractionCache
+
+        cache = ExtractionCache()
+        cache.clear()
+        print("Cache cleared.", file=sys.stderr)
+
+    builder = LicenseReportBuilder(
+        project_paths=project_paths,
+        additional_exclude_dirs=additional_exclude_dirs,
+        verbose=True,
+        parallel=parallel,
+        max_workers=args.max_workers,
+        enable_validation=args.enable_validation,
+        use_cache=use_cache,
+    )
+
+    report = builder.build()
+
+    # Handle output flags
+    output_json_file = args.output_json
+    output_txt_file = args.output_txt
+
+    # Write output(s)
+    # Machine-friendly format is ALWAYS JSON
+    if output_json_file:
+        json_output = report.to_json(indent=2)
+        with open(output_json_file, "w", encoding="utf-8") as f:
+            f.write(json_output)
+        print(f"Machine-friendly JSON output written to: {output_json_file}", file=sys.stderr)
+
+    # User-friendly format (NVIDIA header + third-party) is text
+    if output_txt_file:
+        with open(output_txt_file, "w", encoding="utf-8") as f:
+            report.write_user_friendly(f)
+        print(f"User-friendly text output written to: {output_txt_file}", file=sys.stderr)
+
+    # If neither output specified, print to stdout (user-friendly format)
+    if not output_json_file and not output_txt_file:
+        # Default to user-friendly format (NVIDIA header + filtered third-party)
+        report.write_user_friendly(sys.stdout)
 
 
 if __name__ == "__main__":
