@@ -119,7 +119,9 @@ class TestCLIEdgeCases:
 
         output_file = tmp_path / "output.json"
         monkeypatch.setattr(
-            sys, "argv", ["license-builder", str(test_project_dir), "--output-json", str(output_file)]
+            sys,
+            "argv",
+            ["license-builder", str(test_project_dir), "--output-json", str(output_file)],
         )
 
         with pytest.raises(SystemExit) as exc_info:
@@ -245,7 +247,13 @@ class TestCLIEdgeCases:
         output_file = tmp_path / "output.txt"
 
         result = subprocess.run(
-            ["license-builder", str(test_project_dir), "--output-txt", str(output_file), "--no-parallel"],
+            [
+                "license-builder",
+                str(test_project_dir),
+                "--output-txt",
+                str(output_file),
+                "--no-parallel",
+            ],
             capture_output=True,
             text=True,
             check=False,

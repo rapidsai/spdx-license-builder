@@ -238,4 +238,3 @@ class TestJSONCLI:
         assert "licenses" in data
         assert "summary" in data
         assert isinstance(data["licenses"], list)
-

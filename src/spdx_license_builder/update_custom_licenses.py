@@ -160,7 +160,7 @@ def fetch_license_from_url(url: str, license_id: str) -> str | None:
 # This license text was automatically fetched from the above URL.
 # To update, run: python -m spdx_license_builder.update_custom_licenses
 
-{'=' * 80}
+{"=" * 80}
 
 """
         return header + license_text

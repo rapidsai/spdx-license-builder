@@ -351,6 +351,39 @@ The license builder automatically:
 3. Appends the exception text
 4. Combines them in the output with a clear separator
 
+---
+
+## Development
+
+### Quick Start
+
+```bash
+# Install with development dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks (automatically runs checks on commit)
+make pre-commit-install
+
+# Run all CI checks locally
+make ci-check
+```
+
+### Available Make Targets
+
+```bash
+make help              # Show all available commands
+make lint              # Run ruff linter with auto-fix
+make format            # Format code with ruff
+make format-check      # Check formatting without modifying files
+make test              # Run tests
+make test-cov          # Run tests with coverage report
+make ci-check          # Run the same checks as CI
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.
+
+---
+
 ## License
 
 SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.

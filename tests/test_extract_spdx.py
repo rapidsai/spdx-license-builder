@@ -19,9 +19,7 @@ from spdx_license_builder.extractors import SpdxExtractor
 # Helper functions for tests
 def find_spdx_entries(file_path: str):
     """Helper to extract SPDX entries from a single file using OOP API."""
-    extractor = SpdxExtractor(
-        [PathlibPath(file_path).parent], verbose=False
-    )
+    extractor = SpdxExtractor([PathlibPath(file_path).parent], verbose=False)
     return extractor._find_spdx_entries(file_path)
 
 
