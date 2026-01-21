@@ -220,12 +220,11 @@ class TestExtractorOptions:
         # Should have some output when verbose
         assert len(captured.out) > 0 or len(captured.err) > 0
 
-    def test_quiet_mode(self, test_project_dir, isolated_cache_dir, capsys):
+    def test_quiet_mode(self, test_project_dir, capsys):
         """Test that non-verbose mode is quiet."""
         extractor = SpdxExtractor(
             project_paths=[test_project_dir],
             verbose=False,
-            cache_dir=isolated_cache_dir,
         )
         extractor.extract()
 
