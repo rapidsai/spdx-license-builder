@@ -21,7 +21,7 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .cache import ExtractionCache
 from .license_records import (
@@ -92,7 +92,7 @@ _DEPENDENCY_ADDITIONAL_EXCLUDES: frozenset[str] = _SPDX_ADDITIONAL_EXCLUDES | fr
 )
 
 # Common license file patterns to search for
-_LICENSE_FILE_PATTERNS: List[str] = [
+_LICENSE_FILE_PATTERNS: list[str] = [
     "LICENSE",
     "COPYING",
     "COPYRIGHT",
@@ -105,12 +105,12 @@ class LicenseExtractor:
 
     def __init__(
         self,
-        project_paths: List[Path],
-        directories_to_exclude: Optional[Tuple[str, ...]] = None,
-        additional_exclude_dirs: Optional[Tuple[str, ...]] = None,
+        project_paths: list[Path],
+        directories_to_exclude: tuple[str, ...] | None = None,
+        additional_exclude_dirs: tuple[str, ...] | None = None,
         verbose: bool = True,
-        parallel: Optional[bool] = None,
-        max_workers: Optional[int] = None,
+        parallel: bool | None = None,
+        max_workers: int | None = None,
     ):
         """
         Initialize the license extractor.
@@ -150,11 +150,11 @@ class LicenseExtractor:
         self.max_workers = max_workers
 
     @staticmethod
-    def _default_excluded_dirs() -> Tuple[str, ...]:
+    def _default_excluded_dirs() -> tuple[str, ...]:
         """Return default directories to exclude from scanning."""
         return tuple(_BASE_EXCLUDED_DIRS)
 
-    def _validate_paths(self, project_paths: List[Path]) -> List[Path]:
+    def _validate_paths(self, project_paths: list[Path]) -> list[Path]:
         """
         Validate that all project paths exist and are directories.
 
@@ -218,12 +218,12 @@ class SpdxExtractor(LicenseExtractor):
 
     def __init__(
         self,
-        project_paths: List[Path],
-        directories_to_exclude: Optional[Tuple[str, ...]] = None,
-        additional_exclude_dirs: Optional[Tuple[str, ...]] = None,
+        project_paths: list[Path],
+        directories_to_exclude: tuple[str, ...] | None = None,
+        additional_exclude_dirs: tuple[str, ...] | None = None,
         verbose: bool = True,
-        parallel: Optional[bool] = None,
-        max_workers: Optional[int] = None,
+        parallel: bool | None = None,
+        max_workers: int | None = None,
         exclude_nvidia: bool = False,
         use_cache: bool = True,
     ):
@@ -256,11 +256,11 @@ class SpdxExtractor(LicenseExtractor):
         self.cache = ExtractionCache(enabled=use_cache)  # Caching system
 
     @staticmethod
-    def _default_excluded_dirs() -> Tuple[str, ...]:
+    def _default_excluded_dirs() -> tuple[str, ...]:
         """Return directories to exclude for SPDX extraction (base + test/docs/examples)."""
         return tuple(_BASE_EXCLUDED_DIRS | _SPDX_ADDITIONAL_EXCLUDES)
 
-    def extract(self) -> Dict[str, Dict[str, Any]]:
+    def extract(self) -> dict[str, dict[str, Any]]:
         """
         Extract SPDX copyright entries from source files.
 
@@ -314,7 +314,7 @@ class SpdxExtractor(LicenseExtractor):
     def _walk_directory_parallel(self, dir_path: str) -> None:
         """
         Parallel directory walk using directory-level and batch parallelism.
-        
+
         Strategy:
         1. Collect files by directory
         2. Process directories in parallel (better granularity)
@@ -325,10 +325,10 @@ class SpdxExtractor(LicenseExtractor):
         for root, files in self._walk_with_exclusions(dir_path):
             if files:
                 dir_file_map[root] = [os.path.join(root, f) for f in files]
-        
+
         # Adaptive threshold: only use parallelism if beneficial
         total_files = sum(len(files) for files in dir_file_map.values())
-        
+
         # Use parallelism only if we have enough work to justify overhead
         # Threshold: at least 20 files AND multiple directories
         if total_files < 20 or len(dir_file_map) < 2:
@@ -336,15 +336,15 @@ class SpdxExtractor(LicenseExtractor):
             for file_list in dir_file_map.values():
                 self._process_file_batch(file_list)
             return
-        
+
         # Process directories in parallel (better granularity than per-file)
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit directory batches (much fewer tasks than per-file)
             futures = {
-                executor.submit(self._process_file_batch, files): root 
+                executor.submit(self._process_file_batch, files): root
                 for root, files in dir_file_map.items()
             }
-            
+
             # Wait for completion
             for future in as_completed(futures):
                 try:
@@ -352,63 +352,63 @@ class SpdxExtractor(LicenseExtractor):
                 except Exception as e:
                     root = futures[future]
                     print(f"Error processing directory {root}: {e}", file=sys.stderr)
-    
+
     def _process_file_batch(self, file_paths: list) -> None:
         """
         Process a batch of files sequentially.
-        
+
         Reduces lock contention by processing multiple files before updating
         shared data structures.
-        
+
         Args:
             file_paths: List of file paths to process
         """
         # Process all files and collect results
         batch_results = []
-        
+
         for file_path in file_paths:
             # Get from cache or extract
             cached_data = self.cache.get(file_path)
-            
+
             if cached_data is not None:
                 entries = [
                     SpdxCopyright(
                         license_type=e["license_type"],
                         year_range=e["year_range"],
                         owner=e["owner"],
-                        file_path=e["file_path"]
+                        file_path=e["file_path"],
                     )
                     for e in cached_data
                 ]
             else:
                 entries = self._find_spdx_entries(file_path)
-                
+
                 # Cache the results
                 cache_data = [
                     {
                         "license_type": e.license_type,
                         "year_range": e.year_range,
                         "owner": e.owner,
-                        "file_path": e.file_path
+                        "file_path": e.file_path,
                     }
                     for e in entries
                 ]
                 self.cache.set(file_path, cache_data)
-            
+
             batch_results.append((file_path, entries))
-        
+
         # Single lock acquisition for entire batch (much more efficient!)
         with self._lock:
-            for file_path, entries in batch_results:
+            for _file_path, entries in batch_results:
                 self.file_count += 1
                 self.total_entries += len(entries)
-                
+
                 for entry in entries:
                     filename = os.path.basename(entry.file_path)
-                    
+
                     if filename not in self.file_map:
                         self.file_map[filename] = {"paths": set(), "licenses": set()}
-                    
+
                     self.file_map[filename]["paths"].add(entry.file_path)
                     self.file_map[filename]["licenses"].add(
                         CopyrightInfo(entry.license_type, entry.year_range, entry.owner)
@@ -427,7 +427,7 @@ class SpdxExtractor(LicenseExtractor):
         """
         # Try to get from cache first
         cached_data = self.cache.get(file_path)
-        
+
         if cached_data is not None:
             # Use cached entries
             entries = [
@@ -435,21 +435,21 @@ class SpdxExtractor(LicenseExtractor):
                     license_type=e["license_type"],
                     year_range=e["year_range"],
                     owner=e["owner"],
-                    file_path=e["file_path"]
+                    file_path=e["file_path"],
                 )
                 for e in cached_data
             ]
         else:
             # Extract fresh data
             entries = self._find_spdx_entries(file_path)
-            
+
             # Cache the results
             cache_data = [
                 {
                     "license_type": e.license_type,
                     "year_range": e.year_range,
                     "owner": e.owner,
-                    "file_path": e.file_path
+                    "file_path": e.file_path,
                 }
                 for e in entries
             ]
@@ -474,7 +474,7 @@ class SpdxExtractor(LicenseExtractor):
                 )
 
     @staticmethod
-    def _parse_license_components(license_type: str) -> List[str]:
+    def _parse_license_components(license_type: str) -> list[str]:
         """
         Parse a license string and extract individual license components.
 
@@ -498,7 +498,7 @@ class SpdxExtractor(LicenseExtractor):
         return components if components else [license_type]
 
     @staticmethod
-    def _extract_copyright_info(line: str) -> Optional[Tuple[str, str]]:
+    def _extract_copyright_info(line: str) -> tuple[str, str] | None:
         """
         Extract year range and owner from a copyright line.
 
@@ -547,7 +547,7 @@ class SpdxExtractor(LicenseExtractor):
                 return (years, owner.rstrip(".,;"))
         return None
 
-    def _find_spdx_entries(self, file_path: str) -> List[SpdxCopyright]:
+    def _find_spdx_entries(self, file_path: str) -> list[SpdxCopyright]:
         """
         Extract SPDX copyright entries from a file and associate them with licenses.
 
@@ -641,7 +641,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
     """Extractor for LICENSE files from project dependencies."""
 
     @staticmethod
-    def _default_excluded_dirs() -> Tuple[str, ...]:
+    def _default_excluded_dirs() -> tuple[str, ...]:
         """
         Return directories to exclude for dependency license extraction.
 
@@ -653,12 +653,12 @@ class DependencyLicenseExtractor(LicenseExtractor):
 
     def __init__(
         self,
-        project_paths: List[Path],
-        directories_to_exclude: Optional[Tuple[str, ...]] = None,
-        additional_exclude_dirs: Optional[Tuple[str, ...]] = None,
+        project_paths: list[Path],
+        directories_to_exclude: tuple[str, ...] | None = None,
+        additional_exclude_dirs: tuple[str, ...] | None = None,
         verbose: bool = True,
-        parallel: Optional[bool] = None,
-        max_workers: Optional[int] = None,
+        parallel: bool | None = None,
+        max_workers: int | None = None,
         use_cache: bool = True,
     ):
         """
@@ -687,7 +687,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
         self._lock = threading.Lock()  # Thread safety for parallel processing
         self.cache = ExtractionCache(enabled=use_cache)  # Caching system
 
-    def extract(self) -> Dict[str, Dict[str, Any]]:
+    def extract(self) -> dict[str, dict[str, Any]]:
         """
         Extract LICENSE files from project dependencies.
 
@@ -739,12 +739,12 @@ class DependencyLicenseExtractor(LicenseExtractor):
         else:
             self._process_files_sequential(matching_files, str(project_path))
 
-    def _process_files_sequential(self, file_paths: List[str], project_root: str) -> None:
+    def _process_files_sequential(self, file_paths: list[str], project_root: str) -> None:
         """Process LICENSE files sequentially."""
         for file_path in file_paths:
             self._process_license_file(file_path, project_root)
 
-    def _process_files_parallel(self, file_paths: List[str], project_root: str) -> None:
+    def _process_files_parallel(self, file_paths: list[str], project_root: str) -> None:
         """Process LICENSE files in parallel."""
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tasks
@@ -809,12 +809,12 @@ class LicenseReportBuilder:
 
     def __init__(
         self,
-        project_paths: List[Path],
+        project_paths: list[Path],
         with_licenses: bool = True,
-        additional_exclude_dirs: Optional[Tuple[str, ...]] = None,
+        additional_exclude_dirs: tuple[str, ...] | None = None,
         verbose: bool = True,
-        parallel: Optional[bool] = None,
-        max_workers: Optional[int] = None,
+        parallel: bool | None = None,
+        max_workers: int | None = None,
         exclude_nvidia: bool = False,
         enable_validation: bool = False,
         use_cache: bool = True,
@@ -926,7 +926,7 @@ class LicenseReportBuilder:
             unified_entries=unified_entries,
         )
 
-    def _parse_project_licenses(self) -> Dict[str, List[str]]:
+    def _parse_project_licenses(self) -> dict[str, list[str]]:
         """
         Parse each project's main LICENSE file to extract constituent licenses.
 
@@ -957,7 +957,7 @@ class LicenseReportBuilder:
 
         return project_licenses_map
 
-    def _build_spdx_entries(self, file_map: Dict[str, Dict[str, Any]]) -> List[SpdxEntry]:
+    def _build_spdx_entries(self, file_map: dict[str, dict[str, Any]]) -> list[SpdxEntry]:
         """Build SPDX entry objects from file map."""
         spdx_entries = []
 
@@ -997,7 +997,7 @@ class LicenseReportBuilder:
 
         return spdx_entries
 
-    def _build_license_texts(self, file_map: Dict[str, Dict[str, Any]]) -> List[LicenseText]:
+    def _build_license_texts(self, file_map: dict[str, dict[str, Any]]) -> list[LicenseText]:
         """Build license text objects from file map."""
         license_texts = []
         found_licenses = set()
@@ -1023,10 +1023,10 @@ class LicenseReportBuilder:
 
     def _build_unified_entries(
         self,
-        spdx_file_map: Dict[str, Dict[str, Any]],
-        dep_content_map: Dict[str, Dict[str, Any]],
-        project_licenses_map: Dict[str, List[str]],
-    ) -> List[UnifiedLicenseEntry]:
+        spdx_file_map: dict[str, dict[str, Any]],
+        dep_content_map: dict[str, dict[str, Any]],
+        project_licenses_map: dict[str, list[str]],
+    ) -> list[UnifiedLicenseEntry]:
         """
         Build unified license entries that group by license identifier.
 
@@ -1223,7 +1223,7 @@ class LicenseReportBuilder:
         return unified_entries
 
     def _validate_licenses(
-        self, unified_map: Dict[str, Dict[str, Any]], project_licenses_map: Dict[str, List[str]]
+        self, unified_map: dict[str, dict[str, Any]], project_licenses_map: dict[str, list[str]]
     ) -> None:
         """
         Validate that file-level SPDX licenses exist in project LICENSE files.
@@ -1278,8 +1278,8 @@ class LicenseReportBuilder:
                 data["validation_warnings"] = []
 
     def _build_dependency_licenses(
-        self, content_map: Dict[str, Dict[str, Any]]
-    ) -> List[DependencyLicense]:
+        self, content_map: dict[str, dict[str, Any]]
+    ) -> list[DependencyLicense]:
         """Build dependency license objects from content map."""
         dependency_licenses = []
 

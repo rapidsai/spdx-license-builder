@@ -94,7 +94,7 @@ Examples:
         action="store_true",
         help="Enable license validation warnings (experimental, disabled by default)",
     )
-    
+
     # Cache options
     parser.add_argument(
         "--no-cache",
@@ -121,7 +121,6 @@ Examples:
 def _run_license_builder(args) -> None:
     """Run the license builder with given arguments."""
     from .extractors import LicenseReportBuilder
-    from .license_records import LicenseReport
 
     project_paths = [Path(p) for p in args.project_path]
 
@@ -133,11 +132,12 @@ def _run_license_builder(args) -> None:
 
     # Determine parallel mode: None = auto-detect, False = explicitly disabled
     parallel = None if not args.no_parallel else False
-    
+
     # Handle cache options
     use_cache = not args.no_cache
     if args.clear_cache:
         from .cache import ExtractionCache
+
         cache = ExtractionCache()
         cache.clear()
         print("Cache cleared.", file=sys.stderr)

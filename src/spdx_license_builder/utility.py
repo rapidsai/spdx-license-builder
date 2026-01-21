@@ -14,10 +14,9 @@ import re
 import sys
 import urllib.request
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
 
 
-def merge_date_ranges(date_ranges: List[str]) -> str:
+def merge_date_ranges(date_ranges: list[str]) -> str:
     """
     Merge continuous date ranges while preserving gaps.
 
@@ -96,7 +95,7 @@ def merge_date_ranges(date_ranges: List[str]) -> str:
     return ", ".join(formatted)
 
 
-def extract_copyright_from_license_text(license_content: str) -> List[Tuple[str, str]]:
+def extract_copyright_from_license_text(license_content: str) -> list[tuple[str, str]]:
     """
     Extract copyright statements from LICENSE file content.
 
@@ -171,7 +170,7 @@ def extract_copyright_from_license_text(license_content: str) -> List[Tuple[str,
     return copyrights
 
 
-def detect_license_type(license_content: str) -> Optional[str]:
+def detect_license_type(license_content: str) -> str | None:
     """
     Attempt to detect the license type from license file content.
 
@@ -198,7 +197,7 @@ def detect_license_type(license_content: str) -> Optional[str]:
     return None
 
 
-def extract_all_licenses(license_content: str) -> List[str]:
+def extract_all_licenses(license_content: str) -> list[str]:
     """
     Extract all license types from license file content.
 
@@ -274,8 +273,8 @@ def extract_all_licenses(license_content: str) -> List[str]:
 
 
 def get_project_relative_path(
-    file_path: str, project_root: Optional[str] = None
-) -> Tuple[Optional[str], str]:
+    file_path: str, project_root: str | None = None
+) -> tuple[str | None, str]:
     """
     Extract the project name and relative path from a file path using heuristics.
 
@@ -342,7 +341,7 @@ def get_project_relative_path(
     return None, filename
 
 
-def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
+def get_license_text(license_type: str, base_path: Path) -> str | None:
     """
     Read license text from local cache or fetch from SPDX API.
 
@@ -364,7 +363,7 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
     """
     # Clean the license type (remove trailing whitespace, comment markers, etc.)
     license_id = re.sub(r"[*/\s]+$", "", license_type.strip())
-    
+
     # Handle license exceptions (e.g., "Apache-2.0 WITH LLVM-exception")
     if " WITH " in license_id.upper():
         # Split into base license and exception
@@ -372,29 +371,32 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
         if len(parts) == 2:
             base_license_id = parts[0].strip()
             exception_id = parts[1].strip()
-            
+
             # Get base license text
             base_text = get_license_text(base_license_id, base_path)
             if not base_text:
                 return None
-                
+
             # Get exception text from license_exceptions directory
             exception_path = base_path / "license_exceptions" / f"{exception_id}.txt"
             exception_text = None
-            
+
             if exception_path.exists():
                 try:
                     with open(exception_path, encoding="utf-8") as f:
                         exception_text = f.read()
                 except (OSError, UnicodeDecodeError) as e:
-                    print(f"Warning: Could not read exception file {exception_path}: {e}", file=sys.stderr)
+                    print(
+                        f"Warning: Could not read exception file {exception_path}: {e}",
+                        file=sys.stderr,
+                    )
             else:
                 print(
                     f"Warning: License exception {exception_id} not found. "
                     f"Add it to license_exceptions directory.",
                     file=sys.stderr,
                 )
-            
+
             # Combine base license and exception
             if exception_text:
                 combined = f"{base_text}\n\n{'=' * 80}\n\n{exception_text}"
@@ -487,9 +489,9 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
 
 def walk_directories_for_files(
     dir_path: str,
-    directories_to_exclude: Tuple[str, ...],
-    file_pattern: Union[str, List[str]],
-) -> List[str]:
+    directories_to_exclude: tuple[str, ...],
+    file_pattern: str | list[str],
+) -> list[str]:
     """
     Walk through specified directories and collect all files matching pattern(s).
 
@@ -522,7 +524,7 @@ def walk_directories_for_files(
     return matching_files
 
 
-def find_project_license_file(project_path: Path) -> Optional[Tuple[Path, str, List[str]]]:
+def find_project_license_file(project_path: Path) -> tuple[Path, str, list[str]] | None:
     """
     Find and parse the main LICENSE file for a project.
 

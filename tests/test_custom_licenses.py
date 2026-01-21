@@ -7,7 +7,6 @@ Tests for custom license functionality.
 """
 
 import json
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -24,14 +23,14 @@ class TestCustomLicenses:
         # Create custom_licenses directory with a license file
         custom_dir = tmp_path / "custom_licenses"
         custom_dir.mkdir()
-        
+
         license_file = custom_dir / "LicenseRef-TestLicense.txt"
         license_text = "This is a test custom license."
         license_file.write_text(license_text)
-        
+
         # Get the license text
         result = get_license_text("LicenseRef-TestLicense", tmp_path)
-        
+
         assert result == license_text
 
     def test_get_license_text_custom_license_not_found(self, tmp_path, capsys):
@@ -39,12 +38,12 @@ class TestCustomLicenses:
         # Create empty custom_licenses directory
         custom_dir = tmp_path / "custom_licenses"
         custom_dir.mkdir()
-        
+
         # Try to get a non-existent custom license
         result = get_license_text("LicenseRef-NonExistent", tmp_path)
-        
+
         assert result is None
-        
+
         # Check warning message
         captured = capsys.readouterr()
         assert "LicenseRef-NonExistent" in captured.err
@@ -57,14 +56,14 @@ class TestCustomLicenses:
         custom_dir.mkdir()
         common_dir = tmp_path / "common_licenses"
         common_dir.mkdir()
-        
+
         # Put the same license in both directories with different content
         custom_license = custom_dir / "LicenseRef-Test.txt"
         custom_license.write_text("Custom license text")
-        
+
         common_license = common_dir / "LicenseRef-Test.txt"
         common_license.write_text("Common license text")
-        
+
         # Should get the custom version
         result = get_license_text("LicenseRef-Test", tmp_path)
         assert result == "Custom license text"
@@ -73,7 +72,7 @@ class TestCustomLicenses:
         """Test extracting SPDX entries with custom license references."""
         src_dir = tmp_path / "src"
         src_dir.mkdir()
-        
+
         test_file = src_dir / "test.py"
         test_file.write_text(
             """
@@ -84,14 +83,14 @@ def test_function():
     pass
 """
         )
-        
+
         extractor = SpdxExtractor([tmp_path], verbose=False)
         file_map = extractor.extract()
-        
+
         # Should extract the entry
         assert len(file_map) == 1
         entry = list(file_map.values())[0]
-        
+
         # Check license type
         licenses = list(entry["licenses"])
         assert len(licenses) == 1
@@ -104,11 +103,11 @@ def test_function():
         common_dir.mkdir()
         custom_dir = tmp_path / "custom_licenses"
         custom_dir.mkdir()
-        
+
         # Put a standard license in common_licenses
         mit_license = common_dir / "MIT.txt"
         mit_license.write_text("MIT License text")
-        
+
         # Should find it normally
         result = get_license_text("MIT", tmp_path)
         assert result == "MIT License text"
@@ -117,10 +116,10 @@ def test_function():
         """Test cleaning of LicenseRef identifiers with trailing markers."""
         custom_dir = tmp_path / "custom_licenses"
         custom_dir.mkdir()
-        
+
         license_file = custom_dir / "LicenseRef-Test.txt"
         license_file.write_text("Test license")
-        
+
         # Test with trailing comment markers
         result = get_license_text("LicenseRef-Test  */  ", tmp_path)
         assert result == "Test license"
@@ -132,9 +131,9 @@ class TestUpdateCustomLicenses:
     def test_update_custom_licenses_config_not_found(self, tmp_path, capsys):
         """Test handling when config file doesn't exist."""
         from spdx_license_builder.update_custom_licenses import update_custom_licenses
-        
+
         results = update_custom_licenses(tmp_path)
-        
+
         assert results == {}
         captured = capsys.readouterr()
         assert "Configuration file not found" in captured.err
@@ -142,21 +141,16 @@ class TestUpdateCustomLicenses:
     def test_update_custom_licenses_no_url(self, tmp_path, capsys):
         """Test handling of license entry without URL."""
         from spdx_license_builder.update_custom_licenses import update_custom_licenses
-        
+
         custom_dir = tmp_path / "custom_licenses"
         custom_dir.mkdir()
-        
+
         config_path = custom_dir / "LICENSE_URLS.json"
-        config = {
-            "LicenseRef-NoURL": {
-                "description": "License without URL",
-                "last_updated": None
-            }
-        }
+        config = {"LicenseRef-NoURL": {"description": "License without URL", "last_updated": None}}
         config_path.write_text(json.dumps(config))
-        
+
         results = update_custom_licenses(tmp_path)
-        
+
         assert results["LicenseRef-NoURL"] is False
         captured = capsys.readouterr()
         assert "No URL configured" in captured.err
@@ -164,7 +158,7 @@ class TestUpdateCustomLicenses:
     def test_fetch_license_from_url_mock(self, tmp_path):
         """Test fetching license from URL with mocked HTTP request."""
         from spdx_license_builder.update_custom_licenses import fetch_license_from_url
-        
+
         # Mock HTML with sufficient content (needs to be >100 chars after HTML stripping)
         mock_html = """
         <html>
@@ -176,15 +170,15 @@ class TestUpdateCustomLicenses:
         </body>
         </html>
         """
-        
-        with mock.patch('urllib.request.urlopen') as mock_urlopen:
+
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
             mock_response = mock.MagicMock()
-            mock_response.read.return_value = mock_html.encode('utf-8')
+            mock_response.read.return_value = mock_html.encode("utf-8")
             mock_response.__enter__.return_value = mock_response
             mock_urlopen.return_value = mock_response
-            
+
             result = fetch_license_from_url("http://example.com/license", "LicenseRef-Test")
-            
+
             assert result is not None
             assert "Test License Agreement" in result
             assert "This is the license text" in result
@@ -193,36 +187,36 @@ class TestUpdateCustomLicenses:
 
     def test_fetch_license_from_url_network_error(self, tmp_path, capsys):
         """Test handling of network errors when fetching license."""
-        from spdx_license_builder.update_custom_licenses import fetch_license_from_url
         import urllib.error
-        
-        with mock.patch('urllib.request.urlopen') as mock_urlopen:
+
+        from spdx_license_builder.update_custom_licenses import fetch_license_from_url
+
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
             mock_urlopen.side_effect = urllib.error.URLError("Network error")
-            
+
             result = fetch_license_from_url("http://example.com/license", "LicenseRef-Test")
-            
+
             assert result is None
             captured = capsys.readouterr()
             assert "Error fetching license" in captured.err
 
     def test_main_function(self, tmp_path, capsys):
         """Test the main() function."""
+
         from spdx_license_builder.update_custom_licenses import main
-        import sys
-        
+
         # Mock update_custom_licenses to return controlled results
-        with mock.patch('spdx_license_builder.update_custom_licenses.update_custom_licenses') as mock_update:
-            mock_update.return_value = {
-                "LicenseRef-Test1": True,
-                "LicenseRef-Test2": False
-            }
-            
+        with mock.patch(
+            "spdx_license_builder.update_custom_licenses.update_custom_licenses"
+        ) as mock_update:
+            mock_update.return_value = {"LicenseRef-Test1": True, "LicenseRef-Test2": False}
+
             # Should exit with code 1 when not all succeed
             with pytest.raises(SystemExit) as exc_info:
                 main()
-            
+
             assert exc_info.value.code == 1
-            
+
             # The output goes to stdout (print statements)
             captured = capsys.readouterr()
             assert "Updating custom licenses" in captured.out
@@ -231,7 +225,7 @@ class TestUpdateCustomLicenses:
     def test_nvidia_html_parser(self):
         """Test NvidiaLicenseHTMLParser."""
         from spdx_license_builder.update_custom_licenses import NvidiaLicenseHTMLParser
-        
+
         html = """
         <html>
         <body>
@@ -244,11 +238,11 @@ class TestUpdateCustomLicenses:
         </body>
         </html>
         """
-        
+
         parser = NvidiaLicenseHTMLParser()
         parser.feed(html)
         text = parser.get_text()
-        
+
         assert "NVIDIA Software License Agreement" in text
         assert "License text goes here" in text
         assert "Company Information" not in text
@@ -256,7 +250,7 @@ class TestUpdateCustomLicenses:
     def test_generic_html_parser(self):
         """Test LicenseHTMLParser."""
         from spdx_license_builder.update_custom_licenses import LicenseHTMLParser
-        
+
         html = """
         <html>
         <head><script>skip this</script></head>
@@ -266,11 +260,11 @@ class TestUpdateCustomLicenses:
         </body>
         </html>
         """
-        
+
         parser = LicenseHTMLParser()
         parser.feed(html)
         text = parser.get_text()
-        
+
         assert "License Agreement" in text
         assert "This is the license text" in text
         assert "skip this" not in text
@@ -278,33 +272,33 @@ class TestUpdateCustomLicenses:
     def test_update_custom_licenses_write_error(self, tmp_path, capsys):
         """Test handling of write errors."""
         from spdx_license_builder.update_custom_licenses import update_custom_licenses
-        
+
         # Create config
         custom_dir = tmp_path / "src" / "spdx_license_builder" / "custom_licenses"
         custom_dir.mkdir(parents=True)
-        
-        config = {
-            "LicenseRef-Test": {
-                "url": "http://example.com/license"
-            }
-        }
-        
+
+        config = {"LicenseRef-Test": {"url": "http://example.com/license"}}
+
         config_path = custom_dir / "LICENSE_URLS.json"
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(config, f)
-        
+
         # Mock fetch to return content, but make write fail
-        with mock.patch('spdx_license_builder.update_custom_licenses.fetch_license_from_url') as mock_fetch:
+        with mock.patch(
+            "spdx_license_builder.update_custom_licenses.fetch_license_from_url"
+        ) as mock_fetch:
             mock_fetch.return_value = "License text"
-            
+
             # Make the output file read-only to cause write error
             output_file = custom_dir / "LicenseRef-Test.txt"
             output_file.touch()
             output_file.chmod(0o444)
-            
+
             try:
-                results = update_custom_licenses(base_path=tmp_path / "src" / "spdx_license_builder")
-                
+                results = update_custom_licenses(
+                    base_path=tmp_path / "src" / "spdx_license_builder"
+                )
+
                 # Should fail to write
                 assert results["LicenseRef-Test"] is False
             finally:

@@ -51,7 +51,7 @@ repos:
         pass_filenames: false
         always_run: true
         args: ['-q', '-n', 'auto', '--tb=line']
-        stages: [commit]
+        stages: [pre-commit]
 
       - id: pytest-cov
         name: Run pytest with coverage (push only)
@@ -60,7 +60,7 @@ repos:
         pass_filenames: false
         always_run: true
         args: ['-n', 'auto', '--cov=spdx_license_builder', '--cov-report=term-missing:skip-covered', '--cov-fail-under=80']
-        stages: [push]
+        stages: [pre-push]
 
 # Global settings
 default_language_version:

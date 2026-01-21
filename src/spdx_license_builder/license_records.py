@@ -21,7 +21,7 @@ This module contains all data structures used throughout the license extraction 
 import contextlib
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, TextIO, Tuple
+from typing import Any, TextIO
 
 
 @dataclass(frozen=True)
@@ -65,8 +65,8 @@ class SpdxEntry:
     """Represents a third-party code entry found via SPDX headers in source files."""
 
     filename: str
-    locations: Dict[str, Set[str]]  # project_name -> set of relative paths
-    licenses: Dict[str, List[Tuple[str, str]]]  # license_type -> list of (year_range, owner)
+    locations: dict[str, set[str]]  # project_name -> set of relative paths
+    licenses: dict[str, list[tuple[str, str]]]  # license_type -> list of (year_range, owner)
 
     def write(self, out: TextIO) -> None:
         """Write this SPDX entry to output."""
@@ -99,7 +99,7 @@ class LicenseText:
     """Represents a full license text to be displayed."""
 
     license_id: str
-    text: Optional[str]
+    text: str | None
 
     def write(self, out: TextIO) -> None:
         """Write this license text to output."""
@@ -122,7 +122,7 @@ class LicenseText:
 class DependencyLicense:
     """Represents a LICENSE file from a dependency."""
 
-    locations: Dict[str, Set[str]]  # project_name -> set of relative paths
+    locations: dict[str, set[str]]  # project_name -> set of relative paths
     content: str
 
     def write(self, out: TextIO) -> None:
@@ -169,18 +169,18 @@ class UnifiedLicenseEntry:
     """
 
     license_id: str
-    spdx_files: Dict[str, Dict] = field(
+    spdx_files: dict[str, dict] = field(
         default_factory=dict
     )  # filename -> {project: paths, copyrights: [(year, owner)]}
-    license_files: Dict[str, Set[str]] = field(default_factory=dict)  # project -> set of paths
-    license_file_copyrights: Dict[str, List[Tuple[str, str]]] = field(
+    license_files: dict[str, set[str]] = field(default_factory=dict)  # project -> set of paths
+    license_file_copyrights: dict[str, list[tuple[str, str]]] = field(
         default_factory=dict
     )  # path -> [(year, owner)]
-    license_text: Optional[str] = None
-    in_project_license: Optional[bool] = None  # None = not checked, True = found, False = missing
-    validation_warnings: List[str] = field(default_factory=list)
+    license_text: str | None = None
+    in_project_license: bool | None = None  # None = not checked, True = found, False = missing
+    validation_warnings: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dictionary."""
         # Convert spdx_files to have separate copyright and file paths
         spdx_files_json = []
@@ -384,12 +384,12 @@ class UnifiedLicenseEntry:
 class LicenseReport:
     """Complete license report combining SPDX entries and dependency licenses."""
 
-    spdx_entries: List[SpdxEntry] = field(default_factory=list)
-    license_texts: List[LicenseText] = field(default_factory=list)
-    dependency_licenses: List[DependencyLicense] = field(default_factory=list)
-    unified_entries: List[UnifiedLicenseEntry] = field(default_factory=list)
+    spdx_entries: list[SpdxEntry] = field(default_factory=list)
+    license_texts: list[LicenseText] = field(default_factory=list)
+    dependency_licenses: list[DependencyLicense] = field(default_factory=list)
+    unified_entries: list[UnifiedLicenseEntry] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dictionary."""
         return {
             "licenses": [entry.to_dict() for entry in self.unified_entries],
@@ -477,7 +477,7 @@ class LicenseReport:
             print("No third-party licenses found.", file=out)
             print(file=out)
 
-    def write_user_friendly(self, out: TextIO, nvidia_license_text: Optional[str] = None) -> None:
+    def write_user_friendly(self, out: TextIO, nvidia_license_text: str | None = None) -> None:
         """
         Write user-friendly license report with NVIDIA header + third-party licenses.
 
