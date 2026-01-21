@@ -55,9 +55,23 @@ pre-commit install
 ```
 
 The hooks will automatically run on each commit and will:
-- Lint and fix code with `ruff check --fix`
-- Format code with `ruff format`
+- Lint and fix code with `ruff check --fix` (on `src/` and `tests/`)
+- Format code with `ruff format` (on `src/` and `tests/`)
 - Run tests with `pytest`
+
+**Note:** The pre-commit hooks are configured to match exactly what CI checks, so if pre-commit passes, CI will pass too.
+
+To run pre-commit on all files manually:
+
+```bash
+pre-commit run --all-files
+```
+
+To skip a specific hook (e.g., when testing):
+
+```bash
+SKIP=pytest-check git commit -m "message"
+```
 
 #### Manual code quality checks
 

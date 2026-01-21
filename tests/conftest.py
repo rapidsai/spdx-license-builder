@@ -144,3 +144,26 @@ def common_licenses_dir(tmp_path):
     (licenses_dir / "BSD-3-Clause.txt").write_text("BSD 3-Clause License Full Text...")
 
     return licenses_dir
+
+
+@pytest.fixture
+def isolated_cache_dir(tmp_path):
+    """Provide an isolated cache directory for each test to avoid race conditions."""
+    cache_dir = tmp_path / ".cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+@pytest.fixture(autouse=True)
+def use_isolated_cache(tmp_path, monkeypatch):
+    """
+    Automatically use isolated cache directory for all tests to avoid race conditions.
+
+    This fixture uses monkeypatch to override the cache directory location for all tests,
+    ensuring each test gets its own cache directory when running in parallel.
+    """
+    cache_dir = tmp_path / ".test_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Override the XDG_CACHE_HOME environment variable to use isolated tmp_path
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cache_dir))

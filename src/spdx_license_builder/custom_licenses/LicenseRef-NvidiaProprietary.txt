@@ -1,7 +1,7 @@
 # LicenseRef-NvidiaProprietary
 # Fetched from: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/
 # Date: 2026-01-21T08:50:26.302906
-# 
+#
 # This license text was automatically fetched from the above URL.
 # To update, run: python -m spdx_license_builder.update_custom_licenses
 

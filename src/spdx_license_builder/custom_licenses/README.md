@@ -6,8 +6,8 @@ This directory contains custom license references that are not part of the stand
 
 ### LicenseRef-NvidiaProprietary
 
-**Description:** NVIDIA Software License Agreement  
-**Source:** https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/  
+**Description:** NVIDIA Software License Agreement
+**Source:** https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/
 **Usage:** Used in NVIDIA proprietary software components
 
 ## Configuration

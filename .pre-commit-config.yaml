@@ -33,13 +33,15 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.4
     hooks:
-      # Run the linter
+      # Run the linter (matches CI: ruff check src/ tests/)
       - id: ruff
         name: Lint with ruff
         args: ['--fix', '--unsafe-fixes']
-      # Run the formatter
+        files: ^(src|tests)/.*\.py$
+      # Run the formatter (matches CI: ruff format src/ tests/)
       - id: ruff-format
         name: Format with ruff
+        files: ^(src|tests)/.*\.py$
 
   # Run tests (parallel execution for speed)
   - repo: local

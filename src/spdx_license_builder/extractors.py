@@ -226,6 +226,7 @@ class SpdxExtractor(LicenseExtractor):
         max_workers: int | None = None,
         exclude_nvidia: bool = False,
         use_cache: bool = True,
+        cache_dir: Path | None = None,
     ):
         """
         Initialize SPDX extractor with instance state for results.
@@ -239,6 +240,7 @@ class SpdxExtractor(LicenseExtractor):
             max_workers: Maximum number of worker threads
             exclude_nvidia: Filter out NVIDIA copyrights (default: False, include all)
             use_cache: Enable caching to speed up subsequent runs (default: True)
+            cache_dir: Directory for cache files (default: ~/.cache/spdx-license-builder)
         """
         super().__init__(
             project_paths,
@@ -253,7 +255,7 @@ class SpdxExtractor(LicenseExtractor):
         self.total_entries = 0
         self.exclude_nvidia = exclude_nvidia
         self._lock = threading.Lock()  # Thread safety for parallel processing
-        self.cache = ExtractionCache(enabled=use_cache)  # Caching system
+        self.cache = ExtractionCache(cache_dir=cache_dir, enabled=use_cache)  # Caching system
 
     @staticmethod
     def _default_excluded_dirs() -> tuple[str, ...]:
@@ -660,6 +662,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
         parallel: bool | None = None,
         max_workers: int | None = None,
         use_cache: bool = True,
+        cache_dir: Path | None = None,
     ):
         """
         Initialize the dependency license extractor.
@@ -672,6 +675,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
             parallel: Enable parallel processing using ThreadPoolExecutor (default: True, auto-disabled in debugger)
             max_workers: Maximum number of worker threads (None = use default)
             use_cache: Enable caching to speed up subsequent runs (default: True)
+            cache_dir: Directory for cache files (default: ~/.cache/spdx-license-builder)
         """
         super().__init__(
             project_paths,
@@ -685,7 +689,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
         self.content_map = {}
         self.total_files = 0
         self._lock = threading.Lock()  # Thread safety for parallel processing
-        self.cache = ExtractionCache(enabled=use_cache)  # Caching system
+        self.cache = ExtractionCache(cache_dir=cache_dir, enabled=use_cache)  # Caching system
 
     def extract(self) -> dict[str, dict[str, Any]]:
         """
@@ -818,6 +822,7 @@ class LicenseReportBuilder:
         exclude_nvidia: bool = False,
         enable_validation: bool = False,
         use_cache: bool = True,
+        cache_dir: Path | None = None,
     ):
         """
         Initialize the license report builder.
@@ -832,6 +837,7 @@ class LicenseReportBuilder:
             exclude_nvidia: Filter out NVIDIA copyrights from SPDX entries (default: False, include all)
             enable_validation: Enable license validation warnings (default: False, experimental)
             use_cache: Enable caching to speed up subsequent runs (default: True)
+            cache_dir: Directory for cache files (default: ~/.cache/spdx-license-builder)
         """
         self.project_paths = project_paths
         self.with_licenses = with_licenses
@@ -840,6 +846,7 @@ class LicenseReportBuilder:
         self.exclude_nvidia = exclude_nvidia
         self.enable_validation = enable_validation
         self.use_cache = use_cache
+        self.cache_dir = cache_dir
 
         # Auto-detect parallel mode: enabled by default, disabled in debugger
         if parallel is None:
@@ -886,6 +893,7 @@ class LicenseReportBuilder:
             max_workers=self.max_workers,
             exclude_nvidia=self.exclude_nvidia,
             use_cache=self.use_cache,
+            cache_dir=self.cache_dir,
         )
         spdx_file_map = spdx_extractor.extract()
 
@@ -897,6 +905,7 @@ class LicenseReportBuilder:
             parallel=self.parallel,
             max_workers=self.max_workers,
             use_cache=self.use_cache,
+            cache_dir=self.cache_dir,
         )
         dep_content_map = dep_extractor.extract()
 

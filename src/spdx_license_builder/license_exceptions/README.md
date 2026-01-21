@@ -14,9 +14,9 @@ The exception modifies the base license, not acts as a separate license.
 
 ### LLVM-exception
 
-**Full Name:** LLVM Exception  
-**Used With:** Apache-2.0  
-**Source:** https://spdx.org/licenses/LLVM-exception.html  
+**Full Name:** LLVM Exception
+**Used With:** Apache-2.0
+**Source:** https://spdx.org/licenses/LLVM-exception.html
 **Description:** Allows embedding compiled portions in Object form without complying with certain Apache 2.0 requirements, and provides additional flexibility when combining with GPLv2 software.
 
 ## How Exceptions Work
