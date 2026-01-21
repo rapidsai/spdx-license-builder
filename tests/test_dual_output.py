@@ -42,9 +42,9 @@ class TestDualOutput:
             third_party_section = parts[1]
             # Count NVIDIA mentions in third-party section (should be 0)
             nvidia_count = third_party_section.count("NVIDIA")
-            assert (
-                nvidia_count == 0
-            ), f"Found {nvidia_count} NVIDIA mentions in third-party section (should be 0)"
+            assert nvidia_count == 0, (
+                f"Found {nvidia_count} NVIDIA mentions in third-party section (should be 0)"
+            )
 
     def test_machine_friendly_includes_nvidia(self, test_project_dir, tmp_path):
         """Test that machine-friendly output includes NVIDIA copyrights."""
