@@ -210,8 +210,8 @@ class TestJSONOutput:
 class TestJSONCLI:
     """Test JSON output via CLI."""
 
-    def test_cli_json_flag(self, test_project_dir, tmp_path):
-        """Test that --json flag produces valid JSON output."""
+    def test_cli_json_output(self, test_project_dir, tmp_path):
+        """Test that --output-json produces valid JSON output."""
         import subprocess
 
         output_file = tmp_path / "output.json"
@@ -220,8 +220,7 @@ class TestJSONCLI:
             [
                 "license-builder",
                 str(test_project_dir),
-                "--json",
-                "--output",
+                "--output-json",
                 str(output_file),
                 "--no-parallel",
             ],
@@ -240,24 +239,3 @@ class TestJSONCLI:
         assert "summary" in data
         assert isinstance(data["licenses"], list)
 
-    def test_cli_json_stdout(self, test_project_dir):
-        """Test that --json flag works with stdout."""
-        import subprocess
-
-        result = subprocess.run(
-            [
-                "license-builder",
-                str(test_project_dir),
-                "--json",
-                "--no-parallel",
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0
-
-        # Verify it's valid JSON (ignore stderr which has progress messages)
-        data = json.loads(result.stdout)
-        assert "licenses" in data
-        assert "summary" in data

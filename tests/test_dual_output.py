@@ -240,7 +240,7 @@ class TestDualOutputCLI:
     """Test dual output via CLI."""
 
     def test_cli_dual_output(self, test_project_dir, tmp_path):
-        """Test CLI with both --output and --output-user."""
+        """Test CLI with both --output-json and --output-txt."""
         import json
 
         machine_file = tmp_path / "machine.json"
@@ -250,9 +250,9 @@ class TestDualOutputCLI:
             [
                 "license-builder",
                 str(test_project_dir),
-                "--output",
+                "--output-json",
                 str(machine_file),
-                "--output-user",
+                "--output-txt",
                 str(user_file),
                 "--no-parallel",
             ],
@@ -276,7 +276,7 @@ class TestDualOutputCLI:
         assert "THIRD-PARTY SOFTWARE LICENSES" in user_content
 
     def test_cli_machine_only(self, test_project_dir, tmp_path):
-        """Test CLI with only --output (machine JSON)."""
+        """Test CLI with only --output-json (machine JSON)."""
         import json
 
         machine_file = tmp_path / "machine.json"
@@ -285,7 +285,7 @@ class TestDualOutputCLI:
             [
                 "license-builder",
                 str(test_project_dir),
-                "--output",
+                "--output-json",
                 str(machine_file),
                 "--no-parallel",
             ],
@@ -302,14 +302,14 @@ class TestDualOutputCLI:
         assert "licenses" in machine_data
 
     def test_cli_user_only(self, test_project_dir, tmp_path):
-        """Test CLI with only --output-user."""
+        """Test CLI with only --output-txt."""
         user_file = tmp_path / "user.txt"
 
         result = subprocess.run(
             [
                 "license-builder",
                 str(test_project_dir),
-                "--output-user",
+                "--output-txt",
                 str(user_file),
                 "--no-parallel",
             ],

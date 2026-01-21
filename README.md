@@ -41,7 +41,7 @@ Finds standalone LICENSE files in dependencies:
 
 When a LICENSE file is recognized, it's automatically grouped with SPDX entries of the same license type for unified reporting.
 
-### **Output**
+## **Output**
 
 You can generate up to **two output files** in one run:
 
@@ -70,11 +70,11 @@ license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LI
 
 ---
 
-## Output Examples
+### Output Examples
 
 Both outputs produce a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers and LICENSE files. Beneath the license identifier header, files are grouped by their copyright statements, showing all file locations that share the same copyright holder(s) and year range.
 
-### JSON Output Format
+#### JSON Output Format
 
 Export license information in JSON format for programmatic processing:
 
@@ -116,9 +116,9 @@ license-builder /path/to/project --output-json licenses.json
 }
 ```
 
-### Text Output Format
+#### Text Output Format
 
-#### Example 1: License from SPDX Headers Only
+##### Example 1: License from SPDX Headers Only
 
 When code includes SPDX tags, copyright info is extracted and grouped by copyright holder:
 
@@ -162,7 +162,7 @@ Full License Text:
   (full MIT license text)
 ```
 
-#### Example 2: License from SPDX Headers + LICENSE Files
+##### Example 2: License from SPDX Headers + LICENSE Files
 
 When the same license identifier appears in both sources, they are unified and
 grouped by copyright (which may include more than one copyright line):
@@ -199,7 +199,7 @@ Full License Text:
   (full BSD-3-Clause license text)
 ```
 
-#### Example 3: Detected License from LICENSE File
+##### Example 3: Detected License from LICENSE File
 
 When LICENSE files contain recognizable license text, they are automatically classified and grouped with SPDX entries of the same type:
 
@@ -237,7 +237,7 @@ Full License Text:
   (full MIT license text)
 ```
 
-#### Example 4: Unrecognized LICENSE Files
+##### Example 4: Unrecognized LICENSE Files
 
 For LICENSE files with unrecognizable or custom licenses, each is kept separate:
 
@@ -261,7 +261,7 @@ Full License Text:
   (full custom license text)
 ```
 
-#### Example 5: Aggregate License Files
+##### Example 5: Aggregate License Files
 
 Aggregate LICENSE files containing multiple distinct licenses (like [NVIDIA CCCL](https://github.com/NVIDIA/cccl/blob/main/LICENSE)) are **automatically decomposed** into their constituent licenses:
 
