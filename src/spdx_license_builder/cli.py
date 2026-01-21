@@ -144,6 +144,18 @@ Examples:
         action="store_true",
         help="Enable license validation warnings (experimental, disabled by default)",
     )
+    
+    # Cache options
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable caching (slower but ensures fresh scan)",
+    )
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear cache before running",
+    )
 
     args = parser.parse_args()
 
@@ -188,6 +200,14 @@ def _run_license_builder(args) -> None:
 
     # Determine parallel mode: None = auto-detect, False = explicitly disabled
     parallel = None if not args.no_parallel else False
+    
+    # Handle cache options
+    use_cache = not args.no_cache
+    if args.clear_cache:
+        from .cache import ExtractionCache
+        cache = ExtractionCache()
+        cache.clear()
+        print("Cache cleared.", file=sys.stderr)
 
     builder = LicenseReportBuilder(
         project_paths=project_paths,
@@ -198,6 +218,7 @@ def _run_license_builder(args) -> None:
         max_workers=args.max_workers,
         exclude_nvidia=args.exclude_nvidia,
         enable_validation=args.enable_validation,
+        use_cache=use_cache,
     )
 
     report = builder.build()

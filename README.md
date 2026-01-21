@@ -13,8 +13,11 @@ git clone https://github.com/rapidsai/spdx-license-builder
 cd spdx-license-builder
 pip install -e .
 
-# Extract all license information
-license-builder /path/to/project --output LICENSE
+# Extract all license information (outputs to stdout)
+license-builder /path/to/project
+
+# Save to file
+license-builder /path/to/project --output-json LICENSE.json --output-txt LICENSE.txt
 ```
 
 ---
@@ -36,70 +39,11 @@ Finds standalone LICENSE files in dependencies:
 - Reads full license text from each file
 - **Automatically detects** license type from content and groups with SPDX entries
 
-#### Supported License Detection
-
-The tool automatically recognizes these common licenses from LICENSE file content:
-- **Apache-2.0** - Apache License 2.0
-- **MIT** - MIT License
-- **BSD-2-Clause**, **BSD-3-Clause** - BSD Licenses
-- **GPL-2.0-only**, **GPL-3.0-only** - GNU General Public License
-- **LGPL-2.1-only**, **LGPL-3.0-only** - GNU Lesser General Public License
-- **MPL-2.0** - Mozilla Public License
-- **ISC** - ISC License
-- **NCSA** - University of Illinois/NCSA License
-- **BSL-1.0** - Boost Software License
-- **Unlicense** - Public domain dedication
-- **Composite license from `<path>`** - Aggregate files containing 2+ distinct licenses (each gets a unique identifier based on its file path)
-
 When a LICENSE file is recognized, it's automatically grouped with SPDX entries of the same license type for unified reporting.
 
----
+### **Output**
 
-## Usage
-
-### Basic Commands
-
-```bash
-# Basic usage
-license-builder /path/to/project --output LICENSE
-
-# Multiple projects
-license-builder /path/to/project1 /path/to/project2 --output LICENSE
-```
-
-### Excluding Directories
-
-By default, these directories are automatically excluded: `.git`, `.github`, `dist`, `_build`, `node_modules`, `venv`, `.venv`
-
-You can add additional directories to exclude:
-
-```bash
-# Exclude build directories
-license-builder /path/to/project --exclude-dirs build _skbuild
-
-# Exclude multiple custom directories
-license-builder /path/to/project --exclude-dirs build _skbuild .tox __pycache__
-```
-
-### Performance: Parallel Processing
-
-Parallel processing is **enabled by default** for **2-4x faster scanning**:
-
-```bash
-# Default: parallel processing enabled
-# User-friendly output (NVIDIA header + third-party)
-license-builder /path/to/project --output-txt LICENSE.txt
-
-# Machine-friendly JSON output (all licenses)
-license-builder /path/to/project --output-json LICENSE_FULL.json
-
-# Generate both outputs in one go (recommended)
-license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LICENSE.txt
-```
-
-### Dual-Output Mode
-
-Generate **two output files** in one run:
+You can generate up to **two output files** in one run:
 
 1. **User-Friendly** (`--output-txt`): Text format with NVIDIA Apache-2.0 header, then third-party licenses with NVIDIA copyrights filtered
 2. **Machine-Friendly** (`--output-json`): **JSON format** with complete listing of all licenses explicitly, including all NVIDIA copyrights
@@ -110,77 +54,25 @@ license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LI
 ```
 
 **User-Friendly Format (`--output-txt`, Text):**
-- Starts with NVIDIA Copyright and Apache-2.0 license
-- Separator line
-- Third-party licenses (NVIDIA copyrights filtered from this section)
-- Date ranges merged where continuous (e.g., "2020-2022, 2024-2026" preserves gaps)
-- Clean, professional, ready for distribution
+- Starts with NVIDIA Copyright and Apache-2.0 license, then shows other third
+  party licenses below.
+- Uses indentation to group hierarchically: license type, then copyright, then
+  files that have that copyright group
+- Intended to highlight third-party licenses. NVIDIA copyrights filtered from
+  this view. Read this as "everything but the NVIDIA licensed content." The
+  top-level Apache2 license implicitly applies to any unlisted file.
+- Does not list files that have only an NVIDIA copyright entry
 
 **Machine-Friendly Format (`--output-json`, JSON):**
-- All licenses explicitly listed in JSON format
 - All copyrights included (NVIDIA + third-party)
-- Complete audit trail with full details
+- All files that include copyright information are included
 - Machine-parsable for automation and compliance tools
-
-### Advanced Options
-
-**Custom License References**
-
-The tool supports custom license references (e.g., `LicenseRef-NvidiaProprietary`) that are not part of the standard SPDX license list. These are automatically fetched from configured URLs and cached locally.
-
-```bash
-# Update custom licenses from their source URLs
-license-builder-update-custom-licenses
-
-# Or use the Python module directly
-python -m spdx_license_builder.update_custom_licenses
-```
-
-Custom licenses are configured in `src/spdx_license_builder/custom_licenses/LICENSE_URLS.json`. See the [Custom Licenses README](src/spdx_license_builder/custom_licenses/README.md) for details on adding new custom licenses.
-
-**Supported Custom Licenses:**
-- `LicenseRef-NvidiaProprietary` - NVIDIA Software License Agreement
-
-**License Exceptions**
-
-The tool supports SPDX license exceptions that modify base licenses using the `WITH` keyword (e.g., `Apache-2.0 WITH LLVM-exception`). Exceptions are automatically combined with their base license text.
-
-```bash
-# Example: A file with Apache-2.0 WITH LLVM-exception
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-```
-
-**Supported License Exceptions:**
-- `LLVM-exception` - LLVM exception to Apache 2.0 (see [SPDX LLVM-exception](https://spdx.org/licenses/LLVM-exception.html))
-
-The license builder automatically:
-1. Recognizes the `WITH` keyword in SPDX identifiers
-2. Fetches the base license (e.g., Apache-2.0)
-3. Appends the exception text
-4. Combines them in the output with a clear separator
-
-**License Validation (Experimental)**
-
-The tool can validate that licenses declared in source files (via SPDX headers) exist in the project's main LICENSE file. This feature is **disabled by default** and can be enabled with `--enable-validation`:
-
-```bash
-# Enable license validation warnings
-license-builder /path/to/project --enable-validation
-```
-
-When enabled, you'll see warnings like:
-```
-[⚠] License 'Apache-2.0 AND MIT' declared in source files but not found
-    in project LICENSE file. Missing components: MIT
-```
-
-**Note:** This feature is experimental and may produce false positives for complex license aggregations. It's recommended for debugging license issues only.
 
 ---
 
-## Output Format
+## Output Examples
 
-The tool produces a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers and LICENSE files. Beneath the license identifier header, files are grouped by their copyright statements, showing all file locations that share the same copyright holder and year range.
+Both outputs produce a **unified license-centric format** that groups all information by license identifier, organizing data from both SPDX headers and LICENSE files. Beneath the license identifier header, files are grouped by their copyright statements, showing all file locations that share the same copyright holder(s) and year range.
 
 ### JSON Output Format
 
@@ -188,10 +80,7 @@ Export license information in JSON format for programmatic processing:
 
 ```bash
 # Output to file
-license-builder /path/to/project --json --output licenses.json
-
-# Output to stdout
-license-builder /path/to/project --json
+license-builder /path/to/project --output-json licenses.json
 ```
 
 **JSON Structure:**
@@ -227,15 +116,9 @@ license-builder /path/to/project --json
 }
 ```
 
-**Key Features:**
-- **Separated Copyright and Path Information**: Copyrights are in dedicated lists
-- **Validation Status**: Includes `in_project_license` and `validation_warnings`
-- **Full License Texts**: Complete license text for each license
-- **Summary Statistics**: Overview of total licenses and IDs
-
 ### Text Output Format
 
-### Example 1: License from SPDX Headers Only
+#### Example 1: License from SPDX Headers Only
 
 When code includes SPDX tags, copyright info is extracted and grouped by copyright holder:
 
@@ -279,7 +162,7 @@ Full License Text:
   (full MIT license text)
 ```
 
-### Example 2: License from SPDX Headers + LICENSE Files
+#### Example 2: License from SPDX Headers + LICENSE Files
 
 When the same license identifier appears in both sources, they are unified and
 grouped by copyright (which may include more than one copyright line):
@@ -316,7 +199,7 @@ Full License Text:
   (full BSD-3-Clause license text)
 ```
 
-### Example 3: Detected License from LICENSE File
+#### Example 3: Detected License from LICENSE File
 
 When LICENSE files contain recognizable license text, they are automatically classified and grouped with SPDX entries of the same type:
 
@@ -354,7 +237,7 @@ Full License Text:
   (full MIT license text)
 ```
 
-### Example 4: Unrecognized LICENSE Files
+#### Example 4: Unrecognized LICENSE Files
 
 For LICENSE files with unrecognizable or custom licenses, each is kept separate:
 
@@ -378,7 +261,7 @@ Full License Text:
   (full custom license text)
 ```
 
-### Example 5: Aggregate License Files
+#### Example 5: Aggregate License Files
 
 Aggregate LICENSE files containing multiple distinct licenses (like [NVIDIA CCCL](https://github.com/NVIDIA/cccl/blob/main/LICENSE)) are **automatically decomposed** into their constituent licenses:
 
@@ -431,44 +314,42 @@ Full License Text:
 
 ---
 
-## Python API
+## Advanced Options
 
-```python
-from pathlib import Path
-from spdx_license_builder import LicenseReportBuilder
+**Custom License References**
 
-# Build complete report
-builder = LicenseReportBuilder(
-    project_paths=[Path("/path/to/project")],
-    with_licenses=True,
-    verbose=True,
-)
+The tool supports custom license references (e.g., `LicenseRef-NvidiaProprietary`) that are not part of the standard SPDX license list. These are automatically fetched from configured URLs and cached locally.
 
-report = builder.build()
+```bash
+# Update custom licenses from their source URLs
+license-builder-update-custom-licenses
 
-# Write to file
-with open("LICENSE", "w") as f:
-    report.write(f)
-
-# Exclude additional directories
-builder = LicenseReportBuilder(
-    project_paths=[Path("/path/to/project")],
-    with_licenses=True,
-    additional_exclude_dirs=("build", "_skbuild"),  # Add to default exclusions
-    verbose=True,
-)
-
-# Access data programmatically
-for entry in report.spdx_entries:
-    print(f"File: {entry.filename}")
-    for license_type, copyrights in entry.licenses.items():
-        print(f"  {license_type}: {len(copyrights)} copyright(s)")
-
-for dep_license in report.dependency_licenses:
-    print(f"Locations: {dep_license.locations}")
+# Or use the Python module directly
+python -m spdx_license_builder.update_custom_licenses
 ```
 
----
+Custom licenses are configured in `src/spdx_license_builder/custom_licenses/LICENSE_URLS.json`. See the [Custom Licenses README](src/spdx_license_builder/custom_licenses/README.md) for details on adding new custom licenses.
+
+**Currently Supported Custom Licenses:**
+- `LicenseRef-NvidiaProprietary` - NVIDIA Software License Agreement
+
+**License Exceptions**
+
+The tool supports SPDX license exceptions that modify base licenses using the `WITH` keyword (e.g., `Apache-2.0 WITH LLVM-exception`). Exceptions are automatically combined with their base license text.
+
+```bash
+# Example: A file with Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+```
+
+**Supported License Exceptions:**
+- `LLVM-exception` - LLVM exception to Apache 2.0 (see [SPDX LLVM-exception](https://spdx.org/licenses/LLVM-exception.html))
+
+The license builder automatically:
+1. Recognizes the `WITH` keyword in SPDX identifiers
+2. Fetches the base license (e.g., Apache-2.0)
+3. Appends the exception text
+4. Combines them in the output with a clear separator
 
 ## License
 

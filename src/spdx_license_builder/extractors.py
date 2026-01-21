@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .cache import ExtractionCache
 from .license_records import (
     CopyrightInfo,
     DependencyLicense,
@@ -224,6 +225,7 @@ class SpdxExtractor(LicenseExtractor):
         parallel: Optional[bool] = None,
         max_workers: Optional[int] = None,
         exclude_nvidia: bool = False,
+        use_cache: bool = True,
     ):
         """
         Initialize SPDX extractor with instance state for results.
@@ -236,6 +238,7 @@ class SpdxExtractor(LicenseExtractor):
             parallel: Enable parallel processing (default: auto-detect, disabled in debugger)
             max_workers: Maximum number of worker threads
             exclude_nvidia: Filter out NVIDIA copyrights (default: False, include all)
+            use_cache: Enable caching to speed up subsequent runs (default: True)
         """
         super().__init__(
             project_paths,
@@ -250,6 +253,7 @@ class SpdxExtractor(LicenseExtractor):
         self.total_entries = 0
         self.exclude_nvidia = exclude_nvidia
         self._lock = threading.Lock()  # Thread safety for parallel processing
+        self.cache = ExtractionCache(enabled=use_cache)  # Caching system
 
     @staticmethod
     def _default_excluded_dirs() -> Tuple[str, ...]:
@@ -276,6 +280,11 @@ class SpdxExtractor(LicenseExtractor):
         self._log(f"  Found {self.total_entries} {entries_desc}")
         self._log(f"  In {len(self.file_map)} unique files with third-party licenses")
 
+        # Save cache after extraction
+        self.cache.save()
+        if self.verbose:
+            self.cache.print_stats()
+
         return self.file_map
 
     def _walk_directory(self, dir_path: str) -> None:
@@ -294,32 +303,116 @@ class SpdxExtractor(LicenseExtractor):
             self._walk_directory_sequential(dir_path)
 
     def _walk_directory_sequential(self, dir_path: str) -> None:
-        """Sequential directory walk (original implementation)."""
+        """Sequential directory walk with batching for efficiency."""
+        # Collect files by directory for batch processing
         for root, files in self._walk_with_exclusions(dir_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                self._process_file(file_path)
+            if files:
+                file_paths = [os.path.join(root, f) for f in files]
+                # Process entire directory as a batch (more efficient)
+                self._process_file_batch(file_paths)
 
     def _walk_directory_parallel(self, dir_path: str) -> None:
-        """Parallel directory walk using ThreadPoolExecutor."""
-        # Collect all file paths first
-        file_paths = []
+        """
+        Parallel directory walk using directory-level and batch parallelism.
+        
+        Strategy:
+        1. Collect files by directory
+        2. Process directories in parallel (better granularity)
+        3. Within each directory, use batch processing
+        """
+        # Collect files grouped by directory
+        dir_file_map = {}
         for root, files in self._walk_with_exclusions(dir_path):
-            for file in files:
-                file_paths.append(os.path.join(root, file))
-
-        # Process files in parallel
+            if files:
+                dir_file_map[root] = [os.path.join(root, f) for f in files]
+        
+        # Adaptive threshold: only use parallelism if beneficial
+        total_files = sum(len(files) for files in dir_file_map.values())
+        
+        # Use parallelism only if we have enough work to justify overhead
+        # Threshold: at least 20 files AND multiple directories
+        if total_files < 20 or len(dir_file_map) < 2:
+            # Fall back to sequential processing for small workloads
+            for file_list in dir_file_map.values():
+                self._process_file_batch(file_list)
+            return
+        
+        # Process directories in parallel (better granularity than per-file)
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all tasks
-            futures = {executor.submit(self._process_file, fp): fp for fp in file_paths}
-
+            # Submit directory batches (much fewer tasks than per-file)
+            futures = {
+                executor.submit(self._process_file_batch, files): root 
+                for root, files in dir_file_map.items()
+            }
+            
             # Wait for completion
             for future in as_completed(futures):
                 try:
-                    future.result()  # This will raise any exceptions that occurred
+                    future.result()
                 except Exception as e:
-                    file_path = futures[future]
-                    print(f"Error processing {file_path}: {e}", file=sys.stderr)
+                    root = futures[future]
+                    print(f"Error processing directory {root}: {e}", file=sys.stderr)
+    
+    def _process_file_batch(self, file_paths: list) -> None:
+        """
+        Process a batch of files sequentially.
+        
+        Reduces lock contention by processing multiple files before updating
+        shared data structures.
+        
+        Args:
+            file_paths: List of file paths to process
+        """
+        # Process all files and collect results
+        batch_results = []
+        
+        for file_path in file_paths:
+            # Get from cache or extract
+            cached_data = self.cache.get(file_path)
+            
+            if cached_data is not None:
+                entries = [
+                    SpdxCopyright(
+                        license_type=e["license_type"],
+                        year_range=e["year_range"],
+                        owner=e["owner"],
+                        file_path=e["file_path"]
+                    )
+                    for e in cached_data
+                ]
+            else:
+                entries = self._find_spdx_entries(file_path)
+                
+                # Cache the results
+                cache_data = [
+                    {
+                        "license_type": e.license_type,
+                        "year_range": e.year_range,
+                        "owner": e.owner,
+                        "file_path": e.file_path
+                    }
+                    for e in entries
+                ]
+                self.cache.set(file_path, cache_data)
+            
+            batch_results.append((file_path, entries))
+        
+        # Single lock acquisition for entire batch (much more efficient!)
+        with self._lock:
+            for file_path, entries in batch_results:
+                self.file_count += 1
+                self.total_entries += len(entries)
+                
+                for entry in entries:
+                    filename = os.path.basename(entry.file_path)
+                    
+                    if filename not in self.file_map:
+                        self.file_map[filename] = {"paths": set(), "licenses": set()}
+                    
+                    self.file_map[filename]["paths"].add(entry.file_path)
+                    self.file_map[filename]["licenses"].add(
+                        CopyrightInfo(entry.license_type, entry.year_range, entry.owner)
+                    )
 
     def _process_file(self, file_path: str) -> None:
         """
@@ -327,11 +420,40 @@ class SpdxExtractor(LicenseExtractor):
 
         Updates self.file_map, self.file_count, and self.total_entries.
         Thread-safe for parallel processing.
+        Uses caching to skip unchanged files.
 
         Args:
             file_path: Path to file to process
         """
-        entries = self._find_spdx_entries(file_path)
+        # Try to get from cache first
+        cached_data = self.cache.get(file_path)
+        
+        if cached_data is not None:
+            # Use cached entries
+            entries = [
+                SpdxCopyright(
+                    license_type=e["license_type"],
+                    year_range=e["year_range"],
+                    owner=e["owner"],
+                    file_path=e["file_path"]
+                )
+                for e in cached_data
+            ]
+        else:
+            # Extract fresh data
+            entries = self._find_spdx_entries(file_path)
+            
+            # Cache the results
+            cache_data = [
+                {
+                    "license_type": e.license_type,
+                    "year_range": e.year_range,
+                    "owner": e.owner,
+                    "file_path": e.file_path
+                }
+                for e in entries
+            ]
+            self.cache.set(file_path, cache_data)
 
         # Use lock for thread-safe updates to shared data structures
         with self._lock:
@@ -537,6 +659,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
         verbose: bool = True,
         parallel: Optional[bool] = None,
         max_workers: Optional[int] = None,
+        use_cache: bool = True,
     ):
         """
         Initialize the dependency license extractor.
@@ -548,6 +671,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
             verbose: Whether to print progress messages
             parallel: Enable parallel processing using ThreadPoolExecutor (default: True, auto-disabled in debugger)
             max_workers: Maximum number of worker threads (None = use default)
+            use_cache: Enable caching to speed up subsequent runs (default: True)
         """
         super().__init__(
             project_paths,
@@ -561,6 +685,7 @@ class DependencyLicenseExtractor(LicenseExtractor):
         self.content_map = {}
         self.total_files = 0
         self._lock = threading.Lock()  # Thread safety for parallel processing
+        self.cache = ExtractionCache(enabled=use_cache)  # Caching system
 
     def extract(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -576,6 +701,11 @@ class DependencyLicenseExtractor(LicenseExtractor):
 
         self._log(f"  Found {self.total_files} total LICENSE files")
         self._log(f"  Found {len(self.content_map)} unique LICENSE contents")
+
+        # Save cache after extraction
+        self.cache.save()
+        if self.verbose:
+            self.cache.print_stats()
 
         return self.content_map
 
@@ -687,6 +817,7 @@ class LicenseReportBuilder:
         max_workers: Optional[int] = None,
         exclude_nvidia: bool = False,
         enable_validation: bool = False,
+        use_cache: bool = True,
     ):
         """
         Initialize the license report builder.
@@ -700,6 +831,7 @@ class LicenseReportBuilder:
             max_workers: Maximum number of worker threads for parallel processing (None = use default)
             exclude_nvidia: Filter out NVIDIA copyrights from SPDX entries (default: False, include all)
             enable_validation: Enable license validation warnings (default: False, experimental)
+            use_cache: Enable caching to speed up subsequent runs (default: True)
         """
         self.project_paths = project_paths
         self.with_licenses = with_licenses
@@ -707,6 +839,7 @@ class LicenseReportBuilder:
         self.verbose = verbose
         self.exclude_nvidia = exclude_nvidia
         self.enable_validation = enable_validation
+        self.use_cache = use_cache
 
         # Auto-detect parallel mode: enabled by default, disabled in debugger
         if parallel is None:
@@ -752,6 +885,7 @@ class LicenseReportBuilder:
             parallel=self.parallel,
             max_workers=self.max_workers,
             exclude_nvidia=self.exclude_nvidia,
+            use_cache=self.use_cache,
         )
         spdx_file_map = spdx_extractor.extract()
 
@@ -762,6 +896,7 @@ class LicenseReportBuilder:
             verbose=self.verbose,
             parallel=self.parallel,
             max_workers=self.max_workers,
+            use_cache=self.use_cache,
         )
         dep_content_map = dep_extractor.extract()
 
