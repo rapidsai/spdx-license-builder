@@ -382,7 +382,13 @@ class SpdxExtractor(LicenseExtractor):
           "Copyright (c) 2014-2022 Frank Example" -> ("2014-2022", "Frank Example")
           "Copyright (2019) Sandia Corporation" -> ("2019", "Sandia Corporation")
           "Copyright (c) Facebook, Inc. and its affiliates." -> ("", "Facebook, Inc. and its affiliates")
+
+        Filters out template patterns like @current_year@ or {datetime.datetime.today().year}
         """
+        # Skip lines with template patterns
+        if "@current_year@" in line or "{datetime.datetime.today().year}" in line:
+            return None
+
         # Define patterns: (regex, has_years, validate_years)
         patterns = [
             # Pattern 1: Copyright (c) <year> <owner> or Copyright (C) <year> <owner>
@@ -676,6 +682,7 @@ class LicenseReportBuilder:
         parallel: Optional[bool] = None,
         max_workers: Optional[int] = None,
         exclude_nvidia: bool = False,
+        enable_validation: bool = False,
     ):
         """
         Initialize the license report builder.
@@ -688,12 +695,14 @@ class LicenseReportBuilder:
             parallel: Enable parallel processing for faster scanning (default: True, auto-disabled in debugger)
             max_workers: Maximum number of worker threads for parallel processing (None = use default)
             exclude_nvidia: Filter out NVIDIA copyrights from SPDX entries (default: False, include all)
+            enable_validation: Enable license validation warnings (default: False, experimental)
         """
         self.project_paths = project_paths
         self.with_licenses = with_licenses
         self.additional_exclude_dirs = additional_exclude_dirs
         self.verbose = verbose
         self.exclude_nvidia = exclude_nvidia
+        self.enable_validation = enable_validation
 
         # Auto-detect parallel mode: enabled by default, disabled in debugger
         if parallel is None:
@@ -1123,7 +1132,7 @@ class LicenseReportBuilder:
                     f"Missing components: {', '.join(missing_components)}"
                 )
                 data["validation_warnings"] = [warning]
-                if self.verbose:
+                if self.enable_validation:
                     print(f"\n[⚠] {warning}", file=sys.stderr)
             else:
                 data["in_project_license"] = True

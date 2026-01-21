@@ -18,6 +18,7 @@ This module contains all data structures used throughout the license extraction 
 - LicenseReport: Complete combined report
 """
 
+import contextlib
 import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, TextIO, Tuple
@@ -225,15 +226,21 @@ class UnifiedLicenseEntry:
             "validation_warnings": self.validation_warnings,
         }
 
-    def write(self, out: TextIO) -> None:
-        """Write this unified license entry to output."""
+    def write(self, out: TextIO, show_validation: bool = False) -> None:
+        """
+        Write this unified license entry to output.
+
+        Args:
+            out: Output stream to write to
+            show_validation: Whether to include validation status (default: False for file output)
+        """
         print("=" * 80, file=out)
         print(f"License: {self.license_id}", file=out)
         print("=" * 80, file=out)
         print(file=out)
 
-        # Show validation status if checked
-        if self.in_project_license is not None:
+        # Show validation status if checked (optional, typically for terminal output)
+        if show_validation and self.in_project_license is not None:
             if self.in_project_license:
                 print("  [✓] License found in project LICENSE file", file=out)
             else:
@@ -241,7 +248,7 @@ class UnifiedLicenseEntry:
             print(file=out)
 
         # Show any validation warnings
-        if self.validation_warnings:
+        if show_validation and self.validation_warnings:
             for warning in self.validation_warnings:
                 print(f"  [⚠] {warning}", file=out)
             print(file=out)
@@ -272,15 +279,32 @@ class UnifiedLicenseEntry:
                     for path in sorted(locations[project]):
                         copyright_to_files[copyright_key].append((project, path))
 
-            # Display grouped by copyright
-            for copyright_key, file_paths in sorted(copyright_to_files.items()):
-                # Show copyright first
+            # Display grouped by copyright, merging date ranges for same owner
+            owner_to_copyrights = {}
+            for copyright_key in copyright_to_files:
                 if copyright_key:
                     for year_range, owner in copyright_key:
+                        if owner not in owner_to_copyrights:
+                            owner_to_copyrights[owner] = []
                         if year_range:
-                            print(f"  Copyright (c) {year_range}, {owner}", file=out)
-                        else:
-                            print(f"  Copyright (c) {owner}", file=out)
+                            owner_to_copyrights[owner].append(year_range)
+
+            for copyright_key, file_paths in sorted(copyright_to_files.items()):
+                # Show copyright first (merge dates for same owner)
+                if copyright_key:
+                    displayed_owners = set()
+                    for year_range, owner in copyright_key:
+                        if owner not in displayed_owners:
+                            from .utility import merge_date_ranges
+
+                            merged_dates = merge_date_ranges(
+                                owner_to_copyrights.get(owner, [year_range])
+                            )
+                            if merged_dates:
+                                print(f"  Copyright (c) {merged_dates}, {owner}", file=out)
+                            else:
+                                print(f"  Copyright (c) {owner}", file=out)
+                            displayed_owners.add(owner)
 
                 # Show all file paths under this copyright
                 for project, path in sorted(file_paths):
@@ -307,15 +331,33 @@ class UnifiedLicenseEntry:
                         copyright_groups[copyright_key] = []
                     copyright_groups[copyright_key].append((project, path))
 
-            # Display grouped by copyright
-            for copyright_key, file_list in sorted(copyright_groups.items()):
-                # Display copyright headers first
+            # Group and merge date ranges by owner
+            owner_to_dates = {}
+            for copyright_key in copyright_groups:
                 if copyright_key:
                     for year_range, owner in copyright_key:
+                        if owner not in owner_to_dates:
+                            owner_to_dates[owner] = []
                         if year_range:
-                            print(f"  Copyright (c) {year_range}, {owner}", file=out)
-                        else:
-                            print(f"  Copyright (c) {owner}", file=out)
+                            owner_to_dates[owner].append(year_range)
+
+            # Display grouped by copyright
+            for copyright_key, file_list in sorted(copyright_groups.items()):
+                # Display copyright headers first (merge dates for same owner)
+                if copyright_key:
+                    displayed_owners = set()
+                    for year_range, owner in copyright_key:
+                        if owner not in displayed_owners:
+                            from .utility import merge_date_ranges
+
+                            merged_dates = merge_date_ranges(
+                                owner_to_dates.get(owner, [year_range])
+                            )
+                            if merged_dates:
+                                print(f"  Copyright (c) {merged_dates}, {owner}", file=out)
+                            else:
+                                print(f"  Copyright (c) {owner}", file=out)
+                            displayed_owners.add(owner)
 
                 # Display files under this copyright
                 for project, path in sorted(file_list):
@@ -361,8 +403,14 @@ class LicenseReport:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
-    def write(self, out: TextIO) -> None:
-        """Write the complete license report to output."""
+    def write(self, out: TextIO, show_validation: bool = False) -> None:
+        """
+        Write the complete license report to output (machine-friendly format).
+
+        Args:
+            out: Output stream to write to
+            show_validation: Whether to include validation status
+        """
         # Output header
         print("=" * 80, file=out)
         print("THIRD-PARTY SOFTWARE LICENSES", file=out)
@@ -383,7 +431,7 @@ class LicenseReport:
             print(file=out)
 
             for entry in self.unified_entries:
-                entry.write(out)
+                entry.write(out, show_validation=show_validation)
             return
 
         # Fallback to old two-section format
@@ -428,3 +476,193 @@ class LicenseReport:
         if not self.spdx_entries and not self.dependency_licenses and not self.unified_entries:
             print("No third-party licenses found.", file=out)
             print(file=out)
+
+    def write_user_friendly(self, out: TextIO, nvidia_license_text: Optional[str] = None) -> None:
+        """
+        Write user-friendly license report with NVIDIA header + third-party licenses.
+
+        This format:
+        1. Starts with NVIDIA Apache-2.0 license and copyright
+        2. Adds separator
+        3. Lists third-party licenses (with NVIDIA copyrights filtered out)
+
+        Args:
+            out: Output stream to write to
+            nvidia_license_text: Optional Apache-2.0 license text (will be fetched if not provided)
+        """
+        from datetime import datetime
+
+        from .utility import get_license_text
+
+        # Collect all NVIDIA copyright date ranges to compute full range
+        nvidia_years = set()
+        for entry in self.unified_entries:
+            # Check SPDX files
+            for filename in entry.spdx_files:
+                file_info = entry.spdx_files[filename]
+                copyrights = file_info.get("copyrights", [])
+                for year_range, owner in copyrights:
+                    # Parse year range (e.g., "2020-2024" or "2023")
+                    if "NVIDIA" in owner.upper() and year_range:
+                        years_str = year_range.replace(" ", "")
+                        if "-" in years_str:
+                            start, end = years_str.split("-", 1)
+                            try:
+                                nvidia_years.add(int(start))
+                                nvidia_years.add(int(end))
+                            except ValueError:
+                                pass
+                        else:
+                            with contextlib.suppress(ValueError):
+                                nvidia_years.add(int(years_str))
+
+            # Check LICENSE files
+            for path in entry.license_file_copyrights:
+                copyrights = entry.license_file_copyrights[path]
+                for year_range, owner in copyrights:
+                    if "NVIDIA" in owner.upper() and year_range:
+                        years_str = year_range.replace(" ", "")
+                        if "-" in years_str:
+                            start, end = years_str.split("-", 1)
+                            try:
+                                nvidia_years.add(int(start))
+                                nvidia_years.add(int(end))
+                            except ValueError:
+                                pass
+                        else:
+                            with contextlib.suppress(ValueError):
+                                nvidia_years.add(int(years_str))
+
+        # Determine copyright date range
+        current_year = datetime.now().year
+        if nvidia_years:
+            min_year = min(nvidia_years)
+            max_year = max(max(nvidia_years), current_year)
+            copyright_range = f"{min_year}-{max_year}" if min_year < max_year else str(min_year)
+        else:
+            # Fallback to current year if no NVIDIA copyrights found
+            copyright_range = str(current_year)
+
+        # Header
+        print("=" * 80, file=out)
+        print("SOFTWARE LICENSES", file=out)
+        print("=" * 80, file=out)
+        print(file=out)
+
+        # NVIDIA Section
+        print("=" * 80, file=out)
+        print("License: Apache-2.0 (NVIDIA Code)", file=out)
+        print("=" * 80, file=out)
+        print(file=out)
+
+        print(
+            f"Copyright (c) {copyright_range}, NVIDIA CORPORATION & AFFILIATES. All rights reserved.",
+            file=out,
+        )
+        print(file=out)
+
+        print("Full License Text:", file=out)
+        print(file=out)
+
+        # Get Apache-2.0 license text
+        if nvidia_license_text is None:
+            from pathlib import Path
+
+            nvidia_license_text = get_license_text("Apache-2.0", Path.cwd())
+
+        if nvidia_license_text:
+            for line in nvidia_license_text.splitlines():
+                print(f"  {line}", file=out)
+        else:
+            print("  Apache License", file=out)
+            print("  Version 2.0, January 2004", file=out)
+            print("  http://www.apache.org/licenses/", file=out)
+        print(file=out)
+
+        # Separator for third-party licenses
+        print("=" * 80, file=out)
+        print("THIRD-PARTY SOFTWARE LICENSES", file=out)
+        print("=" * 80, file=out)
+        print(file=out)
+        print(
+            "The following third-party licenses were found in this project.",
+            file=out,
+        )
+        print(file=out)
+
+        # Filter out NVIDIA-only entries and write third-party licenses
+        if self.unified_entries:
+            for entry in self.unified_entries:
+                # Check if this entry has any non-NVIDIA content
+                has_non_nvidia = False
+
+                # Check SPDX files
+                if entry.spdx_files:
+                    for file_info in entry.spdx_files.values():
+                        copyrights = file_info.get("copyrights", [])
+                        if any("NVIDIA" not in owner.upper() for _, owner in copyrights):
+                            has_non_nvidia = True
+                            break
+
+                # Check LICENSE files
+                if not has_non_nvidia and entry.license_files:
+                    for copyrights in entry.license_file_copyrights.values():
+                        if any("NVIDIA" not in owner.upper() for _, owner in copyrights):
+                            has_non_nvidia = True
+                            break
+
+                # Only write entries that have non-NVIDIA content
+                if has_non_nvidia:
+                    # Create a filtered version of the entry
+                    filtered_entry = self._filter_nvidia_from_entry(entry)
+                    filtered_entry.write(out, show_validation=False)
+
+        if not self.unified_entries:
+            print("No third-party licenses found.", file=out)
+            print(file=out)
+
+    @staticmethod
+    def _filter_nvidia_from_entry(entry: UnifiedLicenseEntry) -> UnifiedLicenseEntry:
+        """Create a copy of entry with NVIDIA copyrights filtered out."""
+
+        filtered = UnifiedLicenseEntry(
+            license_id=entry.license_id,
+            license_text=entry.license_text,
+            in_project_license=entry.in_project_license,
+            validation_warnings=entry.validation_warnings,
+        )
+
+        # Filter SPDX files
+        for filename, file_info in entry.spdx_files.items():
+            copyrights = file_info.get("copyrights", [])
+            locations = file_info.get("locations", {})
+
+            # Keep only non-NVIDIA copyrights
+            filtered_copyrights = [
+                (year, owner) for year, owner in copyrights if "NVIDIA" not in owner.upper()
+            ]
+
+            if filtered_copyrights:
+                filtered.spdx_files[filename] = {
+                    "locations": locations,
+                    "copyrights": filtered_copyrights,
+                }
+
+        # Filter LICENSE files
+        for project, paths in entry.license_files.items():
+            for path in paths:
+                copyrights = entry.license_file_copyrights.get(path, [])
+                filtered_copyrights = [
+                    (year, owner) for year, owner in copyrights if "NVIDIA" not in owner.upper()
+                ]
+
+                if (
+                    filtered_copyrights or not copyrights
+                ):  # Include if no copyrights or has non-NVIDIA
+                    if project not in filtered.license_files:
+                        filtered.license_files[project] = set()
+                    filtered.license_files[project].add(path)
+                    if filtered_copyrights:
+                        filtered.license_file_copyrights[path] = filtered_copyrights
+
+        return filtered

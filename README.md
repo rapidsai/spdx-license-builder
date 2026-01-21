@@ -87,20 +87,59 @@ Parallel processing is **enabled by default** for **2-4x faster scanning**:
 
 ```bash
 # Default: parallel processing enabled
-license-builder /path/to/project --output LICENSE
+# User-friendly output (NVIDIA header + third-party)
+license-builder /path/to/project --output-txt LICENSE.txt
 
-# Specify number of worker threads for very large projects
-license-builder /path/to/project --max-workers 8 --output LICENSE
+# Machine-friendly JSON output (all licenses)
+license-builder /path/to/project --output-json LICENSE_FULL.json
 
-# Disable if needed (automatically disabled when debugging)
-license-builder /path/to/project --no-parallel --output LICENSE
-
-# Output in JSON format for programmatic use
-license-builder /path/to/project --json --output licenses.json
-
-# Filter out NVIDIA copyrights (for third-party-only reports)
-license-builder /path/to/project --exclude-nvidia --output LICENSE
+# Generate both outputs in one go (recommended)
+license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LICENSE.txt
 ```
+
+### Dual-Output Mode
+
+Generate **two output files** in one run:
+
+1. **User-Friendly** (`--output-txt`): Text format with NVIDIA Apache-2.0 header, then third-party licenses with NVIDIA copyrights filtered
+2. **Machine-Friendly** (`--output-json`): **JSON format** with complete listing of all licenses explicitly, including all NVIDIA copyrights
+
+```bash
+# Generate both outputs
+license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LICENSE.txt
+```
+
+**User-Friendly Format (`--output-txt`, Text):**
+- Starts with NVIDIA Copyright and Apache-2.0 license
+- Separator line
+- Third-party licenses (NVIDIA copyrights filtered from this section)
+- Date ranges merged where continuous (e.g., "2020-2022, 2024-2026" preserves gaps)
+- Clean, professional, ready for distribution
+
+**Machine-Friendly Format (`--output-json`, JSON):**
+- All licenses explicitly listed in JSON format
+- All copyrights included (NVIDIA + third-party)
+- Complete audit trail with full details
+- Machine-parsable for automation and compliance tools
+
+### Advanced Options
+
+**License Validation (Experimental)**
+
+The tool can validate that licenses declared in source files (via SPDX headers) exist in the project's main LICENSE file. This feature is **disabled by default** and can be enabled with `--enable-validation`:
+
+```bash
+# Enable license validation warnings
+license-builder /path/to/project --enable-validation
+```
+
+When enabled, you'll see warnings like:
+```
+[⚠] License 'Apache-2.0 AND MIT' declared in source files but not found
+    in project LICENSE file. Missing components: MIT
+```
+
+**Note:** This feature is experimental and may produce false positives for complex license aggregations. It's recommended for debugging license issues only.
 
 ---
 

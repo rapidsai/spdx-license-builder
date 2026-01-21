@@ -71,11 +71,30 @@ Examples:
 
     # Output options
     parser.add_argument(
+        "--output-json",
+        type=str,
+        default=None,
+        help="Output file for machine-friendly JSON format (all licenses explicitly listed)",
+    )
+    parser.add_argument(
+        "--output-txt",
+        type=str,
+        default=None,
+        help="Output file for user-friendly text format (NVIDIA header + third-party licenses)",
+    )
+    # Backward compatibility aliases
+    parser.add_argument(
         "-o",
         "--output",
         type=str,
         default=None,
-        help="Write output to file instead of stdout",
+        help="Alias for --output-json (backward compatibility)",
+    )
+    parser.add_argument(
+        "--output-user",
+        type=str,
+        default=None,
+        help="Alias for --output-txt (backward compatibility)",
     )
     parser.add_argument(
         "--no-license-text",
@@ -117,6 +136,13 @@ Examples:
         "--exclude-nvidia",
         action="store_true",
         help="Filter out NVIDIA copyrights from SPDX entries (default: include all)",
+    )
+
+    # Validation options
+    parser.add_argument(
+        "--enable-validation",
+        action="store_true",
+        help="Enable license validation warnings (experimental, disabled by default)",
     )
 
     args = parser.parse_args()
@@ -171,6 +197,7 @@ def _run_license_builder(args) -> None:
         parallel=parallel,
         max_workers=args.max_workers,
         exclude_nvidia=args.exclude_nvidia,
+        enable_validation=args.enable_validation,
     )
 
     report = builder.build()
@@ -194,22 +221,31 @@ def _run_license_builder(args) -> None:
         # Both (default)
         filtered_report = report
 
-    # Write output
-    if args.json:
-        # JSON output
+    # Handle output flags (new flags take precedence over aliases)
+    output_json_file = args.output_json or args.output
+    output_txt_file = args.output_txt or args.output_user
+
+    # Write output(s)
+    # Machine-friendly format is ALWAYS JSON
+    if output_json_file:
         json_output = filtered_report.to_json(indent=2)
-        if args.output:
-            with open(args.output, "w", encoding="utf-8") as f:
-                f.write(json_output)
+        with open(output_json_file, "w", encoding="utf-8") as f:
+            f.write(json_output)
+        print(f"Machine-friendly JSON output written to: {output_json_file}", file=sys.stderr)
+
+    # User-friendly format (NVIDIA header + third-party) is text
+    if output_txt_file:
+        with open(output_txt_file, "w", encoding="utf-8") as f:
+            filtered_report.write_user_friendly(f)
+        print(f"User-friendly text output written to: {output_txt_file}", file=sys.stderr)
+
+    # If neither output specified, print to stdout
+    if not output_json_file and not output_txt_file:
+        if args.json:
+            print(filtered_report.to_json(indent=2))
         else:
-            print(json_output)
-    else:
-        # Text output
-        if args.output:
-            with open(args.output, "w", encoding="utf-8") as f:
-                filtered_report.write(f)
-        else:
-            filtered_report.write(sys.stdout)
+            # Default to user-friendly format (NVIDIA header + filtered third-party)
+            filtered_report.write_user_friendly(sys.stdout)
 
 
 if __name__ == "__main__":

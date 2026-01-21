@@ -17,6 +17,85 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 
+def merge_date_ranges(date_ranges: List[str]) -> str:
+    """
+    Merge continuous date ranges while preserving gaps.
+
+    Examples:
+        ["2023", "2024"] -> "2023-2024"
+        ["2023-2024", "2024-2025"] -> "2023-2025"
+        ["2000-2010", "2012-2025"] -> "2000-2010, 2012-2025" (gap preserved)
+        ["2023"] -> "2023"
+
+    Args:
+        date_ranges: List of date ranges as strings (e.g., ["2023", "2024-2025"])
+
+    Returns:
+        Merged date range string
+    """
+    if not date_ranges:
+        return ""
+
+    if len(date_ranges) == 1:
+        return date_ranges[0]
+
+    # Parse all ranges into (start, end) tuples
+    ranges = []
+    for date_range in date_ranges:
+        date_range = date_range.strip()
+        if not date_range:
+            continue
+
+        if "-" in date_range:
+            parts = date_range.split("-")
+            try:
+                start = int(parts[0].strip())
+                end = int(parts[-1].strip())
+                ranges.append((start, end))
+            except (ValueError, IndexError):
+                # Can't parse, keep as-is
+                continue
+        else:
+            try:
+                year = int(date_range)
+                ranges.append((year, year))
+            except ValueError:
+                continue
+
+    if not ranges:
+        return ", ".join(date_ranges)
+
+    # Sort ranges by start year
+    ranges.sort()
+
+    # Merge continuous ranges
+    merged = []
+    current_start, current_end = ranges[0]
+
+    for start, end in ranges[1:]:
+        # Check if ranges are continuous (no gap)
+        if start <= current_end + 1:
+            # Merge: extend current range
+            current_end = max(current_end, end)
+        else:
+            # Gap found: save current range and start new one
+            merged.append((current_start, current_end))
+            current_start, current_end = start, end
+
+    # Add the last range
+    merged.append((current_start, current_end))
+
+    # Format output
+    formatted = []
+    for start, end in merged:
+        if start == end:
+            formatted.append(str(start))
+        else:
+            formatted.append(f"{start}-{end}")
+
+    return ", ".join(formatted)
+
+
 def extract_copyright_from_license_text(license_content: str) -> List[Tuple[str, str]]:
     """
     Extract copyright statements from LICENSE file content.

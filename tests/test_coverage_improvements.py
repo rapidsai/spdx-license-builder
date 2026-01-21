@@ -323,7 +323,7 @@ class TestLicenseRecordsEdgeCases:
             validation_warnings=["License not found in project LICENSE"],
         )
         output = io.StringIO()
-        entry.write(output)
+        entry.write(output, show_validation=True)
         result = output.getvalue()
         assert "WARNING" in result
         assert "not found" in result
