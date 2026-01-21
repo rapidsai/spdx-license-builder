@@ -222,3 +222,40 @@ class TestCLIEdgeCases:
         # (Only if the project LICENSE was properly detected - in this simple test it might not be)
         # For now, just verify the flag is accepted without error
         assert result.returncode == 0
+
+    def test_clear_cache_flag(self, test_project_dir, tmp_path, capsys):
+        """Test that --clear-cache flag works correctly."""
+        import subprocess
+
+        # Run with --clear-cache
+        result = subprocess.run(
+            ["license-builder", str(test_project_dir), "--clear-cache", "--no-parallel"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert "Cache cleared." in result.stderr
+
+    def test_output_txt_flag(self, test_project_dir, tmp_path):
+        """Test that --output-txt flag creates a text file."""
+        import subprocess
+
+        output_file = tmp_path / "output.txt"
+
+        result = subprocess.run(
+            ["license-builder", str(test_project_dir), "--output-txt", str(output_file), "--no-parallel"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert output_file.exists()
+        assert output_file.stat().st_size > 0
+        assert "User-friendly text output written to:" in result.stderr
+
+        # Verify it's text (not JSON)
+        content = output_file.read_text()
+        assert "SOFTWARE LICENSES" in content or "License:" in content

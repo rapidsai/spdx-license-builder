@@ -85,7 +85,7 @@ def test_function():
 """
         )
         
-        extractor = SpdxExtractor([tmp_path], verbose=False, exclude_nvidia=False)
+        extractor = SpdxExtractor([tmp_path], verbose=False)
         file_map = extractor.extract()
         
         # Should extract the entry
@@ -93,7 +93,7 @@ def test_function():
         entry = list(file_map.values())[0]
         
         # Check license type
-        licenses = entry["licenses"]
+        licenses = list(entry["licenses"])
         assert len(licenses) == 1
         assert licenses[0].license_type == "LicenseRef-TestProprietary"
 
@@ -165,11 +165,14 @@ class TestUpdateCustomLicenses:
         """Test fetching license from URL with mocked HTTP request."""
         from spdx_license_builder.update_custom_licenses import fetch_license_from_url
         
+        # Mock HTML with sufficient content (needs to be >100 chars after HTML stripping)
         mock_html = """
         <html>
         <body>
         <h1>Test License Agreement</h1>
-        <p>This is the license text.</p>
+        <p>This is the license text. This software is provided under the following terms and conditions.
+        Permission is hereby granted to use, copy, modify, and distribute this software for any purpose
+        with or without fee, provided that the above copyright notice appears in all copies.</p>
         </body>
         </html>
         """
@@ -201,3 +204,109 @@ class TestUpdateCustomLicenses:
             assert result is None
             captured = capsys.readouterr()
             assert "Error fetching license" in captured.err
+
+    def test_main_function(self, tmp_path, capsys):
+        """Test the main() function."""
+        from spdx_license_builder.update_custom_licenses import main
+        import sys
+        
+        # Mock update_custom_licenses to return controlled results
+        with mock.patch('spdx_license_builder.update_custom_licenses.update_custom_licenses') as mock_update:
+            mock_update.return_value = {
+                "LicenseRef-Test1": True,
+                "LicenseRef-Test2": False
+            }
+            
+            # Should exit with code 1 when not all succeed
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            
+            assert exc_info.value.code == 1
+            
+            # The output goes to stdout (print statements)
+            captured = capsys.readouterr()
+            assert "Updating custom licenses" in captured.out
+            assert "1/2 licenses updated successfully" in captured.out
+
+    def test_nvidia_html_parser(self):
+        """Test NvidiaLicenseHTMLParser."""
+        from spdx_license_builder.update_custom_licenses import NvidiaLicenseHTMLParser
+        
+        html = """
+        <html>
+        <body>
+        <nav>Skip this</nav>
+        <div>Download PDF</div>
+        <h1>NVIDIA Software License Agreement</h1>
+        <p>License text goes here.</p>
+        <p>More license text.</p>
+        <footer>Company Information</footer>
+        </body>
+        </html>
+        """
+        
+        parser = NvidiaLicenseHTMLParser()
+        parser.feed(html)
+        text = parser.get_text()
+        
+        assert "NVIDIA Software License Agreement" in text
+        assert "License text goes here" in text
+        assert "Company Information" not in text
+
+    def test_generic_html_parser(self):
+        """Test LicenseHTMLParser."""
+        from spdx_license_builder.update_custom_licenses import LicenseHTMLParser
+        
+        html = """
+        <html>
+        <head><script>skip this</script></head>
+        <body>
+        <h1>License Agreement</h1>
+        <p>This is the license text.</p>
+        </body>
+        </html>
+        """
+        
+        parser = LicenseHTMLParser()
+        parser.feed(html)
+        text = parser.get_text()
+        
+        assert "License Agreement" in text
+        assert "This is the license text" in text
+        assert "skip this" not in text
+
+    def test_update_custom_licenses_write_error(self, tmp_path, capsys):
+        """Test handling of write errors."""
+        from spdx_license_builder.update_custom_licenses import update_custom_licenses
+        
+        # Create config
+        custom_dir = tmp_path / "src" / "spdx_license_builder" / "custom_licenses"
+        custom_dir.mkdir(parents=True)
+        
+        config = {
+            "LicenseRef-Test": {
+                "url": "http://example.com/license"
+            }
+        }
+        
+        config_path = custom_dir / "LICENSE_URLS.json"
+        with open(config_path, 'w') as f:
+            json.dump(config, f)
+        
+        # Mock fetch to return content, but make write fail
+        with mock.patch('spdx_license_builder.update_custom_licenses.fetch_license_from_url') as mock_fetch:
+            mock_fetch.return_value = "License text"
+            
+            # Make the output file read-only to cause write error
+            output_file = custom_dir / "LicenseRef-Test.txt"
+            output_file.touch()
+            output_file.chmod(0o444)
+            
+            try:
+                results = update_custom_licenses(base_path=tmp_path / "src" / "spdx_license_builder")
+                
+                # Should fail to write
+                assert results["LicenseRef-Test"] is False
+            finally:
+                # Cleanup
+                output_file.chmod(0o644)

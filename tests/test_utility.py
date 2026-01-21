@@ -171,11 +171,11 @@ class TestLicenseComponentParsing:
         assert "Apache-2.0" in result
 
     def test_parse_license_with_with(self):
-        """Test parsing license with WITH operator."""
+        """Test parsing license with WITH operator - WITH is not split."""
         result = SpdxExtractor._parse_license_components("Apache-2.0 WITH LLVM-exception")
-        assert len(result) == 2
-        assert "Apache-2.0" in result
-        assert "LLVM-exception" in result
+        # WITH should not be split - it's handled specially in get_license_text
+        assert len(result) == 1
+        assert "Apache-2.0 WITH LLVM-exception" in result
 
     def test_parse_complex_license(self):
         """Test parsing complex compound license."""

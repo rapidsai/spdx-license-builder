@@ -17,21 +17,20 @@ from spdx_license_builder.extractors import SpdxExtractor
 
 
 # Helper functions for tests
-def find_spdx_entries(file_path: str, exclude_nvidia: bool = True):
+def find_spdx_entries(file_path: str):
     """Helper to extract SPDX entries from a single file using OOP API."""
     extractor = SpdxExtractor(
-        [PathlibPath(file_path).parent], verbose=False, exclude_nvidia=exclude_nvidia
+        [PathlibPath(file_path).parent], verbose=False
     )
     return extractor._find_spdx_entries(file_path)
 
 
-def walk_directories(dir_path: str, directories_to_exclude, exclude_nvidia: bool = True):
+def walk_directories(dir_path: str, directories_to_exclude):
     """Helper to walk directories and extract SPDX entries using OOP API."""
     extractor = SpdxExtractor(
         [PathlibPath(dir_path)],
         directories_to_exclude=directories_to_exclude,
         verbose=False,
-        exclude_nvidia=exclude_nvidia,
     )
     extractor._walk_directory(dir_path)
     return extractor.file_map
@@ -87,8 +86,8 @@ void foo() {}
         for entry in entries:
             assert entry.license_type == "Apache-2.0"
 
-    def test_ignore_nvidia_copyright(self, tmp_path):
-        """Test that NVIDIA copyrights are filtered with exclude_nvidia=True."""
+    def test_extract_all_copyrights(self, tmp_path):
+        """Test that all copyrights are extracted including NVIDIA."""
         test_file = tmp_path / "test.cpp"
         test_file.write_text(
             """
@@ -102,13 +101,13 @@ void foo() {}
 """
         )
 
-        entries = find_spdx_entries(str(test_file), exclude_nvidia=True)
+        entries = find_spdx_entries(str(test_file))
 
-        # Should only get the Third Party Corp entry when filtering
-        assert len(entries) == 1
-        entry = entries[0]
-        assert entry.owner == "Third Party Corp"
-        assert entry.license_type == "MIT"
+        # Should get both entries
+        assert len(entries) == 2
+        owners = {entry.owner for entry in entries}
+        assert "NVIDIA CORPORATION & AFFILIATES" in owners
+        assert "Third Party Corp" in owners
 
     def test_compound_license(self, tmp_path):
         """Test extraction of compound license (AND/OR)."""
@@ -176,10 +175,8 @@ int main() { return 0; }
 
         entries = find_spdx_entries(str(test_file))
         # Should extract BSD-3-Clause correctly, stopping at the # character
-        # NVIDIA copyright should be filtered by default
         assert isinstance(entries, list)
-        # If there are entries (when exclude_nvidia=False is used elsewhere),
-        # verify the license is extracted correctly
+        # Verify the license is extracted correctly
         for entry in entries:
             assert entry.license_type == "BSD-3-Clause"
             assert "#pragma" not in entry.license_type
@@ -196,15 +193,15 @@ class TestWalkDirectories:
             pytest.skip("Test fixtures not found")
 
         directories_to_exclude = ("test", "tests", "benchmark")
-        file_map = walk_directories(str(fixtures_path), directories_to_exclude, exclude_nvidia=True)
+        file_map = walk_directories(str(fixtures_path), directories_to_exclude)
 
-        # Should find facebook files (grouped)
+        # Should find files
         assert len(file_map) > 0
 
-        # Check that NVIDIA files are excluded when using exclude_nvidia=True
+        # Verify each entry has required fields
         for _filename, info in file_map.items():
-            for copyright_info in info["licenses"]:
-                assert "NVIDIA" not in copyright_info.owner.upper()
+            assert "licenses" in info
+            assert "paths" in info
 
     def test_grouping_by_filename(self):
         """Test that files with the same name are grouped together."""

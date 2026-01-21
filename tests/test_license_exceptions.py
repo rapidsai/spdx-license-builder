@@ -128,7 +128,7 @@ int main() { return 0; }
 """
         )
         
-        extractor = SpdxExtractor([tmp_path], verbose=False, exclude_nvidia=False)
+        extractor = SpdxExtractor([tmp_path], verbose=False)
         file_map = extractor.extract()
         
         # Should extract the entry
@@ -139,7 +139,7 @@ int main() { return 0; }
         entry = file_map[filename]
         
         # Check license type is preserved with WITH
-        licenses = entry["licenses"]
+        licenses = list(entry["licenses"])
         assert len(licenses) == 1
         assert licenses[0].license_type == "Apache-2.0 WITH LLVM-exception"
         
