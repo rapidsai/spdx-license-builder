@@ -124,6 +124,41 @@ license-builder /path/to/project --output-json LICENSE_FULL.json --output-txt LI
 
 ### Advanced Options
 
+**Custom License References**
+
+The tool supports custom license references (e.g., `LicenseRef-NvidiaProprietary`) that are not part of the standard SPDX license list. These are automatically fetched from configured URLs and cached locally.
+
+```bash
+# Update custom licenses from their source URLs
+license-builder-update-custom-licenses
+
+# Or use the Python module directly
+python -m spdx_license_builder.update_custom_licenses
+```
+
+Custom licenses are configured in `src/spdx_license_builder/custom_licenses/LICENSE_URLS.json`. See the [Custom Licenses README](src/spdx_license_builder/custom_licenses/README.md) for details on adding new custom licenses.
+
+**Supported Custom Licenses:**
+- `LicenseRef-NvidiaProprietary` - NVIDIA Software License Agreement
+
+**License Exceptions**
+
+The tool supports SPDX license exceptions that modify base licenses using the `WITH` keyword (e.g., `Apache-2.0 WITH LLVM-exception`). Exceptions are automatically combined with their base license text.
+
+```bash
+# Example: A file with Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+```
+
+**Supported License Exceptions:**
+- `LLVM-exception` - LLVM exception to Apache 2.0 (see [SPDX LLVM-exception](https://spdx.org/licenses/LLVM-exception.html))
+
+The license builder automatically:
+1. Recognizes the `WITH` keyword in SPDX identifiers
+2. Fetches the base license (e.g., Apache-2.0)
+3. Appends the exception text
+4. Combines them in the output with a clear separator
+
 **License Validation (Experimental)**
 
 The tool can validate that licenses declared in source files (via SPDX headers) exist in the project's main LICENSE file. This feature is **disabled by default** and can be enabled with `--enable-validation`:

@@ -40,6 +40,7 @@ dev = [
 
 [project.scripts]
 license-builder = "spdx_license_builder.cli:main"
+license-builder-update-custom-licenses = "spdx_license_builder.update_custom_licenses:main"
 
 [project.urls]
 Homepage = "https://github.com/rapidsai/spdx-license-builder"
@@ -60,6 +61,11 @@ include = ["spdx_license_builder*"]
 [tool.setuptools.package-data]
 spdx_license_builder = [
     "common_licenses/*.txt",
+    "custom_licenses/*.txt",
+    "custom_licenses/*.json",
+    "custom_licenses/*.md",
+    "license_exceptions/*.txt",
+    "license_exceptions/*.md",
 ]
 
 [tool.black]

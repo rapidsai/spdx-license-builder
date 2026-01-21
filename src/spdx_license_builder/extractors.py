@@ -357,16 +357,18 @@ class SpdxExtractor(LicenseExtractor):
         Parse a license string and extract individual license components.
 
         Handles compound licenses like "Apache-2.0 AND MIT" or "MIT OR Apache-2.0".
+        For exceptions (WITH), returns them as separate components to be handled specially.
 
         Args:
             license_type: The SPDX license identifier (may be compound)
 
         Returns:
-            List of individual license identifiers
+            List of individual license identifiers (including exceptions with WITH)
         """
         components = []
-        # Split by AND/OR operators (case insensitive)
-        parts = re.split(r"\s+(?:AND|OR|WITH)\s+", license_type, flags=re.IGNORECASE)
+        # Split by AND/OR operators (case insensitive), but not WITH
+        # WITH is handled differently as it indicates an exception, not a separate license
+        parts = re.split(r"\s+(?:AND|OR)\s+", license_type, flags=re.IGNORECASE)
         for part in parts:
             part = part.strip()
             if part:
@@ -467,12 +469,14 @@ class SpdxExtractor(LicenseExtractor):
                             # If we hit a license identifier, associate it with all copyrights
                             if "SPDX-License-Identifier:" in next_line:
                                 # Extract the license type
+                                # Only capture valid SPDX license identifier characters:
+                                # alphanumeric, hyphens, dots, plus, spaces (for AND/OR), and parentheses (for WITH)
                                 license_match = re.search(
-                                    r"SPDX-License-Identifier:\s*(.+?)(?:\s*$)", next_line
+                                    r"SPDX-License-Identifier:\s*([\w\.\-\+\s\(\)]+)", next_line
                                 )
                                 if license_match:
                                     license_type = license_match.group(1).strip()
-                                    # Clean up any trailing comment markers
+                                    # Clean up any trailing comment markers or whitespace
                                     license_type = re.sub(r"[*/\s]+$", "", license_type)
 
                                     # Associate this license with all collected copyrights

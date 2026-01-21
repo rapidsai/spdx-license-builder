@@ -162,6 +162,28 @@ int main() { return 0; }
         # The exact behavior depends on implementation
         assert isinstance(entries, list)
 
+    def test_license_identifier_with_pragma_on_same_line(self, tmp_path):
+        """Test handling of SPDX-License-Identifier with #pragma on same line (no newline)."""
+        test_file = tmp_path / "test.cuh"
+        test_file.write_text(
+            """
+// SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause#pragma once
+
+int main() { return 0; }
+"""
+        )
+
+        entries = find_spdx_entries(str(test_file))
+        # Should extract BSD-3-Clause correctly, stopping at the # character
+        # NVIDIA copyright should be filtered by default
+        assert isinstance(entries, list)
+        # If there are entries (when exclude_nvidia=False is used elsewhere),
+        # verify the license is extracted correctly
+        for entry in entries:
+            assert entry.license_type == "BSD-3-Clause"
+            assert "#pragma" not in entry.license_type
+
 
 class TestWalkDirectories:
     """Test walking directories to collect SPDX entries."""

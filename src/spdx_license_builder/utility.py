@@ -347,13 +347,16 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
     Read license text from local cache or fetch from SPDX API.
 
     Algorithm:
-    1. First search the common_licenses directory for the short form license
-    2. Then search the infrequent_licenses directory for the short form license
-    3. If not found locally, pull the license via http://spdx.org/licenses/[licenseID].json
-    4. Cache fetched licenses in infrequent_licenses directory
+    1. For licenses with exceptions (e.g., "Apache-2.0 WITH LLVM-exception"),
+       fetch both the base license and exception text and combine them
+    2. For custom licenses (LicenseRef-*), check custom_licenses directory
+    3. For standard licenses, search common_licenses directory
+    4. Then search infrequent_licenses directory
+    5. If not found locally, pull the license via http://spdx.org/licenses/[licenseID].json
+    6. Cache fetched licenses in infrequent_licenses directory
 
     Args:
-        license_type: The SPDX license identifier
+        license_type: The SPDX license identifier, custom LicenseRef, or license with exception
         base_path: Base path to the project directory
 
     Returns:
@@ -361,6 +364,44 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
     """
     # Clean the license type (remove trailing whitespace, comment markers, etc.)
     license_id = re.sub(r"[*/\s]+$", "", license_type.strip())
+    
+    # Handle license exceptions (e.g., "Apache-2.0 WITH LLVM-exception")
+    if " WITH " in license_id.upper():
+        # Split into base license and exception
+        parts = re.split(r"\s+WITH\s+", license_id, maxsplit=1, flags=re.IGNORECASE)
+        if len(parts) == 2:
+            base_license_id = parts[0].strip()
+            exception_id = parts[1].strip()
+            
+            # Get base license text
+            base_text = get_license_text(base_license_id, base_path)
+            if not base_text:
+                return None
+                
+            # Get exception text from license_exceptions directory
+            exception_path = base_path / "license_exceptions" / f"{exception_id}.txt"
+            exception_text = None
+            
+            if exception_path.exists():
+                try:
+                    with open(exception_path, encoding="utf-8") as f:
+                        exception_text = f.read()
+                except (OSError, UnicodeDecodeError) as e:
+                    print(f"Warning: Could not read exception file {exception_path}: {e}", file=sys.stderr)
+            else:
+                print(
+                    f"Warning: License exception {exception_id} not found. "
+                    f"Add it to license_exceptions directory.",
+                    file=sys.stderr,
+                )
+            
+            # Combine base license and exception
+            if exception_text:
+                combined = f"{base_text}\n\n{'=' * 80}\n\n{exception_text}"
+                return combined
+            else:
+                # Return base license even if exception is missing
+                return base_text
 
     # Alias common license variations to their canonical SPDX identifiers
     LICENSE_ALIASES = {
@@ -369,7 +410,11 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
     license_id = LICENSE_ALIASES.get(license_id, license_id)
 
     # Check local directories in priority order
-    license_directories = ["common_licenses", "infrequent_licenses"]
+    # For custom licenses (LicenseRef-*), check custom_licenses first
+    if license_id.startswith("LicenseRef-"):
+        license_directories = ["custom_licenses", "common_licenses", "infrequent_licenses"]
+    else:
+        license_directories = ["common_licenses", "infrequent_licenses", "custom_licenses"]
 
     for dir_name in license_directories:
         license_path = base_path / dir_name / f"{license_id}.txt"
@@ -383,7 +428,16 @@ def get_license_text(license_type: str, base_path: Path) -> Optional[str]:
                 print(f"Unexpected error reading {license_path}: {e}", file=sys.stderr)
                 raise
 
-    # Fetch from SPDX API
+    # For custom licenses, check if we need to fetch them
+    if license_id.startswith("LicenseRef-"):
+        print(
+            f"Warning: Custom license {license_id} not found locally. "
+            f"Run 'python -m spdx_license_builder.update_custom_licenses' to fetch it.",
+            file=sys.stderr,
+        )
+        return None
+
+    # Fetch from SPDX API (only for standard SPDX licenses)
     spdx_url = f"http://spdx.org/licenses/{license_id}.json"
     try:
         print(f"Fetching license {license_id} from SPDX API...", file=sys.stderr)
