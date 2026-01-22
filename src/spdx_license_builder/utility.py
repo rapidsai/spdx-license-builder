@@ -11,9 +11,15 @@ Utility functions for license extraction scripts.
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.request
 from pathlib import Path
+
+try:
+    import certifi
+except ImportError:
+    certifi = None
 
 
 def merge_date_ranges(date_ranges: list[str]) -> str:
@@ -443,10 +449,17 @@ def get_license_text(license_type: str, base_path: Path) -> str | None:
         return None
 
     # Fetch from SPDX API (only for standard SPDX licenses)
-    spdx_url = f"http://spdx.org/licenses/{license_id}.json"
+    spdx_url = f"https://spdx.org/licenses/{license_id}.json"
     try:
         print(f"Fetching license {license_id} from SPDX API...", file=sys.stderr)
-        with urllib.request.urlopen(spdx_url, timeout=10) as response:
+
+        # Create SSL context with certifi's CA bundle if available
+        if certifi:
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+        else:
+            ssl_context = ssl.create_default_context()
+
+        with urllib.request.urlopen(spdx_url, timeout=10, context=ssl_context) as response:
             data = json.loads(response.read().decode("utf-8"))
             license_text = data.get("licenseText")
 
