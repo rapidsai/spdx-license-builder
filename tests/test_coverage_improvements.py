@@ -98,8 +98,8 @@ Copyright
                 "http://test", 404, "Not Found", {}, None
             )
 
-            result = get_license_text("NONEXISTENT-LICENSE", tmp_path)
-            assert result is None
+            with pytest.raises(RuntimeError, match="Could not fetch license.*HTTP 404"):
+                get_license_text("NONEXISTENT-LICENSE", tmp_path)
 
     def test_get_license_text_url_error(self, tmp_path):
         """Test handling of URL error when fetching license."""
@@ -112,8 +112,8 @@ Copyright
 
             mock_urlopen.side_effect = urllib.error.URLError("Network error")
 
-            result = get_license_text("TEST-LICENSE", tmp_path)
-            assert result is None
+            with pytest.raises(RuntimeError, match="Failed to fetch license.*Network error"):
+                get_license_text("TEST-LICENSE", tmp_path)
 
     def test_get_license_text_json_decode_error(self, tmp_path):
         """Test handling of JSON decode error."""
@@ -127,8 +127,8 @@ Copyright
             mock_response.__enter__.return_value = mock_response
             mock_urlopen.return_value = mock_response
 
-            result = get_license_text("TEST-LICENSE", tmp_path)
-            assert result is None
+            with pytest.raises(RuntimeError, match="Failed to fetch license"):
+                get_license_text("TEST-LICENSE", tmp_path)
 
     def test_get_license_text_no_license_text_field(self, tmp_path):
         """Test handling when SPDX response has no licenseText field."""
@@ -142,8 +142,8 @@ Copyright
             mock_response.__enter__.return_value = mock_response
             mock_urlopen.return_value = mock_response
 
-            result = get_license_text("TEST-LICENSE", tmp_path)
-            assert result is None
+            with pytest.raises(ValueError, match="No licenseText field found"):
+                get_license_text("TEST-LICENSE", tmp_path)
 
     def test_get_license_text_cache_write_error(self, tmp_path):
         """Test handling of error when writing cache file."""
@@ -171,9 +171,11 @@ Copyright
         license_file.write_text("Test")
 
         # Mock file read to fail
-        with mock.patch("builtins.open", side_effect=OSError("Read error")):
-            result = get_license_text("TEST", tmp_path)
-            assert result is None
+        with (
+            mock.patch("builtins.open", side_effect=OSError("Read error")),
+            pytest.raises(RuntimeError, match="Could not read license file"),
+        ):
+            get_license_text("TEST", tmp_path)
 
     def test_find_project_license_read_error(self, tmp_path):
         """Test handling of read error in find_project_license_file."""

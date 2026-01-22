@@ -39,14 +39,15 @@ class TestCustomLicenses:
         custom_dir = tmp_path / "custom_licenses"
         custom_dir.mkdir()
 
-        # Try to get a non-existent custom license
-        result = get_license_text("LicenseRef-NonExistent", tmp_path)
+        # Try to get a non-existent custom license - should raise an error
+        with pytest.raises(
+            FileNotFoundError, match="Custom license LicenseRef-NonExistent not found locally"
+        ):
+            get_license_text("LicenseRef-NonExistent", tmp_path)
 
-        assert result is None
-
-        # Check warning message
+        # Check error message
         captured = capsys.readouterr()
-        assert "LicenseRef-NonExistent" in captured.err
+        assert "Error: Custom license LicenseRef-NonExistent not found locally" in captured.err
         assert "update_custom_licenses" in captured.err
 
     def test_get_license_text_custom_license_priority(self, tmp_path):

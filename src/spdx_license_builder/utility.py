@@ -434,19 +434,25 @@ def get_license_text(license_type: str, base_path: Path) -> str | None:
                 with open(license_path, encoding="utf-8") as f:
                     return f.read()
             except (OSError, UnicodeDecodeError) as e:
-                print(f"Warning: Could not read license file {license_path}: {e}", file=sys.stderr)
+                error_msg = (
+                    f"Error: Could not read license file {license_path}: {e}. "
+                    f"Cannot generate license report without license text."
+                )
+                print(error_msg, file=sys.stderr)
+                raise RuntimeError(error_msg) from e
             except Exception as e:
                 print(f"Unexpected error reading {license_path}: {e}", file=sys.stderr)
                 raise
 
     # For custom licenses, check if we need to fetch them
     if license_id.startswith("LicenseRef-"):
-        print(
-            f"Warning: Custom license {license_id} not found locally. "
-            f"Run 'python -m spdx_license_builder.update_custom_licenses' to fetch it.",
-            file=sys.stderr,
+        error_msg = (
+            f"Error: Custom license {license_id} not found locally. "
+            f"Run 'python -m spdx_license_builder.update_custom_licenses' to fetch it. "
+            f"Cannot generate license report without license text."
         )
-        return None
+        print(error_msg, file=sys.stderr)
+        raise FileNotFoundError(error_msg)
 
     # Fetch from SPDX API (only for standard SPDX licenses)
     spdx_url = f"https://spdx.org/licenses/{license_id}.json"
@@ -483,21 +489,29 @@ def get_license_text(license_type: str, base_path: Path) -> str | None:
 
                 return license_text
             else:
-                print(
-                    f"Warning: No licenseText field found in SPDX response for {license_id}",
-                    file=sys.stderr,
+                error_msg = (
+                    f"Error: No licenseText field found in SPDX response for {license_id}. "
+                    f"Cannot generate license report without license text."
                 )
-                return None
+                print(error_msg, file=sys.stderr)
+                raise ValueError(error_msg)
 
     except urllib.error.HTTPError as e:
-        print(
-            f"Warning: Could not fetch license {license_id} from SPDX API (HTTP {e.code})",
-            file=sys.stderr,
+        error_msg = (
+            f"Error: Could not fetch license {license_id} from SPDX API (HTTP {e.code}). "
+            f"Cannot generate license report without license text. "
+            f"Consider adding this license to common_licenses/ directory."
         )
-        return None
+        print(error_msg, file=sys.stderr)
+        raise RuntimeError(error_msg) from e
     except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
-        print(f"Warning: Error fetching license {license_id} from SPDX API: {e}", file=sys.stderr)
-        return None
+        error_msg = (
+            f"Error: Failed to fetch license {license_id} from SPDX API: {e}. "
+            f"Cannot generate license report without license text. "
+            f"Consider adding this license to common_licenses/ directory."
+        )
+        print(error_msg, file=sys.stderr)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         print(f"Unexpected error fetching {license_id}: {e}", file=sys.stderr)
         raise
