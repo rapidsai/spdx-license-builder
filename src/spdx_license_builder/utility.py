@@ -407,7 +407,10 @@ def get_license_text(license_type: str, base_path: Path) -> str | None:
 
     # Alias common license variations to their canonical SPDX identifiers
     LICENSE_ALIASES = {
+        "Apache-2": "Apache-2.0",
+        "Apache": "Apache-2.0",
         "BSD-3": "BSD-3-Clause",
+        "BSD-2": "BSD-2-Clause",
     }
     license_id = LICENSE_ALIASES.get(license_id, license_id)
 
