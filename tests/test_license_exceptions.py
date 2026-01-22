@@ -8,6 +8,8 @@ Tests for license exception handling.
 
 from pathlib import Path
 
+import pytest
+
 from spdx_license_builder.extractors import SpdxExtractor
 from spdx_license_builder.utility import get_license_text
 
@@ -83,19 +85,23 @@ class TestLicenseExceptions:
         assert "NonExistent-exception" in captured.err
         assert "not found" in captured.err
 
-    def test_get_license_with_missing_base(self, tmp_path):
+    def test_get_license_with_missing_base(self, tmp_path, capsys):
         """Test handling when base license is missing."""
+        common_dir = tmp_path / "common_licenses"
+        common_dir.mkdir()
         exceptions_dir = tmp_path / "license_exceptions"
         exceptions_dir.mkdir()
 
         llvm_file = exceptions_dir / "LLVM-exception.txt"
         llvm_file.write_text("LLVM Exception")
 
-        # Base license doesn't exist
-        result = get_license_text("NonExistent WITH LLVM-exception", tmp_path)
+        # Base license doesn't exist - should raise an error
+        with pytest.raises(RuntimeError, match="Could not fetch license NonExistent"):
+            get_license_text("NonExistent WITH LLVM-exception", tmp_path)
 
-        # Should return None if base license is missing
-        assert result is None
+        # Check that error was printed
+        captured = capsys.readouterr()
+        assert "Error:" in captured.err
 
     def test_plain_license_still_works(self, tmp_path):
         """Test that plain licenses without exceptions still work normally."""

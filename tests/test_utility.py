@@ -8,6 +8,8 @@
 Tests for utility functions.
 """
 
+import pytest
+
 from spdx_license_builder.extractors import SpdxExtractor
 from spdx_license_builder.utility import (
     detect_license_type,
@@ -76,8 +78,8 @@ class TestGetLicenseText:
 
         # Try to get a license that doesn't exist
         # This will try to fetch from SPDX API, which should fail for invalid license
-        result = get_license_text("INVALID-LICENSE-ID-12345", tmp_path)
-        assert result is None
+        with pytest.raises(RuntimeError, match="Could not fetch license.*HTTP 404"):
+            get_license_text("INVALID-LICENSE-ID-12345", tmp_path)
 
     def test_clean_license_type(self, tmp_path):
         """Test that license type is cleaned (trailing whitespace, comment markers)."""
