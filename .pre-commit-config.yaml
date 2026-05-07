@@ -64,6 +64,11 @@ repos:
         args: ['-n', 'auto', '--cov=spdx_license_builder', '--cov-report=term-missing:skip-covered', '--cov-fail-under=80']
         stages: [pre-push]
 
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.24.1
+    hooks:
+      - id: zizmor
+
 # Global settings
 default_language_version:
   python: python3
