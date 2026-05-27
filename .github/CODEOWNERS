@@ -1,3 +1,4 @@
-
+# default codeowners (overridden by more specific matches below)
+* @rapidsai/packaging-codeowners
 # Ops code owners
 /SECURITY.md             @rapidsai/ops-codeowners
