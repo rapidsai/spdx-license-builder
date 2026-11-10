@@ -11,7 +11,17 @@ on:
 permissions: {}
 
 jobs:
+  burndown-pr:
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    uses: rapidsai/shared-workflows/.github/workflows/burndown-pr.yaml@main
+
   build:
+    if: >-
+      needs.burndown-pr.result == 'success' && needs.burndown-pr.outputs.skip-product-ci != 'true'
+    needs: [burndown-pr]
     name: Build distribution packages
     runs-on: ubuntu-latest
 
@@ -51,8 +61,10 @@ jobs:
         check-wheel-contents dist/*.whl
 
   install-test:
+    if: >-
+      needs.burndown-pr.result == 'success' && needs.burndown-pr.outputs.skip-product-ci != 'true'
     name: Test installation from wheel
-    needs: build
+    needs: [burndown-pr, build]
     runs-on: ${{ matrix.os }}
 
     strategy:

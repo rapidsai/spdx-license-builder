@@ -9,7 +9,17 @@ on:
 permissions: {}
 
 jobs:
+  burndown-pr:
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    uses: rapidsai/shared-workflows/.github/workflows/burndown-pr.yaml@main
+
   test:
+    if: >-
+      needs.burndown-pr.result == 'success' && needs.burndown-pr.outputs.skip-product-ci != 'true'
+    needs: [burndown-pr]
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
 
