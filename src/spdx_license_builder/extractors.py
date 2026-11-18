@@ -492,7 +492,9 @@ class SpdxExtractor(LicenseExtractor):
         components = []
         # Split by AND/OR operators (case insensitive), but not WITH
         # WITH is handled differently as it indicates an exception, not a separate license
-        parts = re.split(r"\s+(?:AND|OR)\s+", license_type, flags=re.IGNORECASE)
+        # Grouping affects the expression, but parentheses are not part of the lookup IDs.
+        ungrouped = re.sub(r"[()]", " ", license_type)
+        parts = re.split(r"\s+(?:AND|OR)\s+", ungrouped, flags=re.IGNORECASE)
         for part in parts:
             part = part.strip()
             if part:
