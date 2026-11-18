@@ -179,6 +179,14 @@ class TestLicenseComponentParsing:
         assert len(result) == 1
         assert "Apache-2.0 WITH LLVM-exception" in result
 
+    def test_parse_grouped_license_with_exception(self):
+        expression = "((MIT OR BSD-3-Clause) AND (Apache-2.0 WITH LLVM-exception))"
+        assert SpdxExtractor._parse_license_components(expression) == [
+            "MIT",
+            "BSD-3-Clause",
+            "Apache-2.0 WITH LLVM-exception",
+        ]
+
     def test_parse_complex_license(self):
         """Test parsing complex compound license."""
         result = SpdxExtractor._parse_license_components("Apache-2.0 AND MIT OR BSD-3-Clause")
